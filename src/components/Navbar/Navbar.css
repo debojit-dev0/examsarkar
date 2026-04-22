@@ -53,27 +53,30 @@
     display: flex;
     gap: 30px;
   }
-  
-  .nav-links a {
+
+    .nav-link {
+      background: none;
+      border: none;
     text-decoration: none;
     color: #475569;
-  
+
     font-size: 14px;
     font-weight: 500;
-  
+
     padding-bottom: 4px;
-  
+
     transition: all 0.3s ease;
+      cursor: pointer;
   }
-  
+
   /* ✨ CLEAN PREMIUM HOVER (NO BOX) */
-  .nav-links a:hover {
+    .nav-link:hover {
     color: #195dc9;
     border-bottom: 2px solid #5e7ac4;
   }
-  
+
   /* 🎯 ACTIVE LINK (optional but recommended) */
-  .nav-links a.active {
+    .nav-link.active {
     color: #195dc9;
     border-bottom: 2px solid #5e7ac4;
   }

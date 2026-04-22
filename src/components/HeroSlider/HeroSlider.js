@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import "./HeroSlider.css";
-import { FaFire, FaChartBar, FaBullseye, FaRocket } from "react-icons/fa";
+import { FaBullseye, FaRocket } from "react-icons/fa";
 
 
 const images = [
@@ -9,7 +9,7 @@ const images = [
   "https://images.unsplash.com/photo-1522202176988-66273c2fd55f"
 ];
 
-export default function HeroSlider() {
+export default function HeroSlider({ onSignupClick, onLoginClick }) {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
@@ -46,13 +46,13 @@ export default function HeroSlider() {
 
         {/* BUTTONS */}
         <div className="buttons">
-          <button className="primary">
+          <button className="primary" onClick={onSignupClick}>
             <FaRocket className="btn-icon" />
-            Start Free Test
+            Register Now
           </button>
 
-          <button className="secondary">
-            Explore Plans
+          <button className="secondary" onClick={onLoginClick}>
+            Login
           </button>
         </div>
 

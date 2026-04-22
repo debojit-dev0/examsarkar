@@ -2,6 +2,41 @@
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
+## Firebase Auth + Realtime Database Setup
+
+This project now includes connected Register and Login flows through backend APIs using Firebase Realtime Database.
+
+1. Create a Firebase project.
+2. Create a Realtime Database.
+3. Place `Service.json` in the project root.
+4. Copy `.env.example` to `.env`.
+5. Set `FIREBASE_DATABASE_URL` and `SERVICE_ACCOUNT_PATH`.
+6. Run `npm run dev`.
+
+## Run Frontend + Backend Together
+
+Use one command to start both servers:
+
+- `npm run dev`
+
+Default ports:
+
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:5000`
+- Health check: `http://localhost:5000/api/health`
+
+### Registration fields stored
+
+- First name
+- Last name
+- Email
+- Phone number
+- Password hash
+- Confirm password hash
+- Created timestamp
+
+User profile data is written to `users/{uid}` in Firebase Realtime Database, and email mapping is stored in `usersByEmail/{emailKey}`.
+
 ## Available Scripts
 
 In the project directory, you can run:

@@ -8,7 +8,6 @@ export default function Navbar({
 }) {
   return (
     <header className="navbar">
-      
       <div
         className="logo"
         onClick={onHomeClick}
@@ -19,4 +18,28 @@ export default function Navbar({
       </div>
 
       <nav className="nav-links">
-        <a onClick={onHomeClick} style={{ cursor: "pointer" }}>
+        <button type="button" className="nav-link" onClick={onHomeClick}>
+          Home
+        </button>
+        <button type="button" className="nav-link" onClick={onPlansClick}>
+          Plans
+        </button>
+        <button type="button" className="nav-link">
+          Courses
+        </button>
+        <button type="button" className="nav-link">
+          Blog
+        </button>
+      </nav>
+
+      <div className="nav-actions">
+        <button className="login" onClick={onLoginClick}>
+          Login
+        </button>
+        <button className="signup" onClick={onSignupClick}>
+          Register
+        </button>
+      </div>
+    </header>
+  );
+}

@@ -50,6 +50,8 @@ function App() {
 
       {/* MAIN SECTIONS */}
       <Tiles />
+      <WhyUs />
+      <FreeTest />
       <HowItWorks />
       <Testimonials />
       <CTA />
