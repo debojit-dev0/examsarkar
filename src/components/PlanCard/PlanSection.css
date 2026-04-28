@@ -2,11 +2,11 @@
 /* PLAN SECTION WRAPPER */
 /* ========================= */
 .plan-section {
-  width: 100%;
-  max-width: 980px;
-  margin: 56px auto 0;
-  padding: 0 6px;
-}
+    width: 100%;
+    max-width: 900px;
+    margin: 70px auto 0 auto; /* 🔥 center properly */
+    padding: 0 10px;
+  }
   
   /* ========================= */
   /* HEADER */
@@ -15,83 +15,80 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 14px;
-    margin-bottom: 18px;
+    margin-bottom: 22px;
   }
   
   /* TITLE BLOCK */
   .plan-header h2 {
-    margin: 0;
-    font-size: clamp(28px, 3vw, 36px);
-    font-weight: 800;
-    letter-spacing: 0.2px;
-    color: #0f172a;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  
+    background: linear-gradient(135deg, #ffffff, #a5b4fc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
   }
   
   /* 🔥 Premium underline */
   .plan-header h2::after {
     content: "";
     display: block;
-    width: 56px;
-    height: 4px;
-    margin-top: 10px;
-    background: linear-gradient(90deg, #1d4ed8, #2563eb);
-    border-radius: 999px;
+    width: 42px;
+    height: 3px;
+    margin-top: 8px;
+  
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border-radius: 10px;
   }
   
   /* SUBTITLE */
   .plan-subtitle {
-    margin: 8px 0 0;
-    font-size: 15px;
-    color: #4b5a73;
+    font-size: 14px;
+    color: #94a3b8;
+    margin-top: 6px;
   }
   
   /* ========================= */
   /* BADGE */
   /* ========================= */
   .badge {
-    font-size: 12px;
-    padding: 6px 12px;
-    border-radius: 999px;
-    background: #e3eeff;
-    color: #0a3ca2;
-    border: 1px solid #bcd2fd;
-    font-weight: 700;
-    letter-spacing: 0.2px;
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 20px;
+  
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+  
+    font-weight: 500;
+    letter-spacing: 0.3px;
   }
   
   /* ========================= */
   /* BEST VALUE TAG */
   /* ========================= */
   .best-tag {
-    display: inline-flex;
-    align-items: center;
     font-size: 12px;
-    color: #0b6b3a;
-    background: #dcfce7;
-    border: 1px solid #86efac;
-    margin: 2px 0 12px 2px;
-    padding: 4px 9px;
-    border-radius: 999px;
-    font-weight: 700;
+    color: #22c55e;
+    margin: 6px 0 12px 2px;
+    font-weight: 500;
   }
   
   /* ========================= */
   /* SUB CARDS ROW */
   /* ========================= */
   .sub-row {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    justify-content: center;
     align-items: stretch;
-    gap: 16px;
+    gap: 24px; /* 🔥 better breathing */
   }
   
   /* ========================= */
   /* HIGHLIGHT PLAN (Monthly) */
   /* ========================= */
   .highlight {
-    border-left: 4px solid #2563eb;
-    padding-left: 12px;
+    border-left: 3px solid #6366f1;
+    padding-left: 14px;
   }
   
   /* ========================= */
@@ -99,26 +96,17 @@
   /* ========================= */
   @media (max-width: 768px) {
     .plan-section {
-      margin-top: 40px;
-      padding: 0;
+      margin-top: 50px;
     }
-
+  
     .sub-row {
-      grid-template-columns: 1fr;
-      gap: 14px;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
     }
-
+  
     .plan-header {
       flex-direction: column;
       gap: 10px;
-      margin-bottom: 14px;
-    }
-
-    .plan-header h2 {
-      font-size: 30px;
-    }
-
-    .plan-subtitle {
-      font-size: 14px;
     }
   }

@@ -15,11 +15,12 @@ import SignupModal from "./components/Auth/SignupModal";
 import LoginModal from "./components/Auth/LoginModal";
 
 import TestSeriesPage from "./pages/TestSeries/TestSeriesPage";
+import AdminAuthPage from "./pages/Admin/AdminAuthPage";
 
 import "./App.css";
 
 
-// 🔥 NEW WRAPPER COMPONENT (handles navigation)
+// NEW WRAPPER COMPONENT (handles navigation)
 function AppContent() {
   const [authMode, setAuthMode] = useState(null);
 
@@ -27,14 +28,9 @@ function AppContent() {
 
   // refs for smooth scroll
   const heroRef = useRef(null);
-  const plansRef = useRef(null);
 
   const scrollToHero = () => {
     heroRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  const scrollToPlans = () => {
-    plansRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   return (
@@ -50,7 +46,8 @@ function AppContent() {
               onSignupClick={() => setAuthMode("signup")}
               onLoginClick={() => setAuthMode("login")}
               onHomeClick={scrollToHero}
-              onPlansClick={() => navigate("/test-series")} // 🔥 CHANGED HERE
+              onPlansClick={() => navigate("/test-series")} //  CHANGED HERE
+              onFreeDailyTestClick={() => navigate("/test-series#free-daily-test")}
             />
 
             {/* HERO */}
@@ -59,8 +56,8 @@ function AppContent() {
                 onSignupClick={() => setAuthMode("signup")}
                 onLoginClick={() => setAuthMode("login")}
               />
+              
             </div>
-
             {/* MAIN SECTIONS */}
             <Tiles />
             <WhyUs />
@@ -68,9 +65,6 @@ function AppContent() {
             <HowItWorks />
             <Testimonials />
             <CTA />
-
-            {/* SCROLL TARGET */}
-            <div ref={plansRef}></div>
 
             {/* FOOTER */}
             <Footer />
@@ -93,6 +87,9 @@ function AppContent() {
 
       {/* ================= TEST SERIES PAGE ================= */}
       <Route path="/test-series" element={<TestSeriesPage />} />
+
+      {/* ================= ADMIN PANEL ================= */}
+      <Route path="/admin" element={<AdminAuthPage />} />
 
     </Routes>
   );

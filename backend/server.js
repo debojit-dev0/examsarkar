@@ -67,6 +67,68 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+const adminTestsRef = () => database.ref("adminTests/items");
+
+const normalizeAdminTestsPayload = (tests) => {
+  if (!Array.isArray(tests)) return [];
+
+  return tests
+    .filter((test) => test && test.id)
+    .map((test) => ({
+      id: test.id,
+      testName: test.testName || "",
+      type: test.type || "daily",
+      access: test.access || "free",
+      date: test.date || "",
+      questionCount: Number(test.questionCount) || 0,
+      parsedQuestions: Array.isArray(test.parsedQuestions) ? test.parsedQuestions : [],
+      fileName: test.fileName || "",
+      createdAt: test.createdAt || new Date().toISOString()
+    }));
+};
+
+app.get("/api/admin/tests", async (req, res) => {
+  try {
+    const snapshot = await adminTestsRef().get();
+
+    if (!snapshot.exists()) {
+      return res.status(200).json({ tests: [] });
+    }
+
+    const value = snapshot.val();
+    const tests = Array.isArray(value)
+      ? value.filter(Boolean)
+      : Object.entries(value).map(([id, test]) => ({ id, ...test }));
+
+    tests.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+    return res.status(200).json({ tests });
+  } catch (error) {
+    console.error("Load admin tests error:", error);
+    return res.status(500).json({ message: "Failed to load quizzes from database." });
+  }
+});
+
+app.put("/api/admin/tests", async (req, res) => {
+  try {
+    const tests = normalizeAdminTestsPayload(req.body?.tests);
+    const testsById = tests.reduce((accumulator, test) => {
+      accumulator[test.id] = test;
+      return accumulator;
+    }, {});
+
+    await adminTestsRef().set(testsById);
+
+    return res.status(200).json({
+      message: "Quiz library saved successfully.",
+      tests
+    });
+  } catch (error) {
+    console.error("Save admin tests error:", error);
+    return res.status(500).json({ message: "Failed to save quizzes to database." });
+  }
+});
+
 app.post("/api/auth/register", async (req, res) => {
   try {
     const {
@@ -100,26 +162,6 @@ app.post("/api/auth/register", async (req, res) => {
     const normalizedEmail = email.trim().toLowerCase();
     const emailKey = toEmailKey(normalizedEmail);
     const emailRef = database.ref(`usersByEmail/${emailKey}`);
-    const emailSnapshot = await emailRef.get();
-    const legacyUserSnapshot = await database
-      .ref("users")
-        const emailRef = database.ref(`usersByEmail/${emailKey}`);
-        const [emailSnapshot, userEmailSnapshot] = await Promise.all([
-          emailRef.get(),
-          database
-            .ref("users")
-            .orderByChild("email")
-            .equalTo(normalizedEmail)
-            .limitToFirst(1)
-            .get()
-        ]);
-      .limitToFirst(1)
-        if (emailSnapshot.exists() || userEmailSnapshot.exists()) {
-
-    if (emailSnapshot.exists() || legacyUserSnapshot.exists()) {
-      return res.status(409).json({ message: "This email is already registered." });
-    }
-
     const uid = crypto.randomUUID();
     const createdAt = new Date().toISOString();
     const userRecord = {
