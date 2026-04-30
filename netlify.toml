@@ -1,0 +1,26 @@
+# Netlify configuration for ExamSarkar
+[build]
+  command = "npm run build"
+  functions = "netlify/functions"
+  publish = "build"
+
+[env]
+  # Local development env
+  [env.dev]
+    REACT_APP_BACKEND_URL = "http://localhost:5000"
+  
+  # Netlify production env
+  [env.production]
+    REACT_APP_BACKEND_URL = "/.netlify/functions/api"
+
+# Redirect all API calls to serverless functions
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+
+# SPA routing - redirect all non-asset requests to index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

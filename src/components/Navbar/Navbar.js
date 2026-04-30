@@ -1,74 +1,236 @@
-import { useNavigate } from "react-router-dom";
 import "./Navbar.css";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ChevronDown, LogOut } from "lucide-react";
+
+// Auto-detect backend URL for Netlify or local dev
+const getApiUrl = () => {
+  if (window.location.hostname.includes('.netlify.app')) {
+    return `${window.location.protocol}//${window.location.host}/.netlify/functions/api`;
+  }
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:5000';
+  }
+  const protocol = window.location.protocol === "https:" ? "https:" : "http:";
+  const hostname = window.location.hostname || "localhost";
+  return `${protocol}//${hostname}:5000`;
+};
+
+const API_URL = getApiUrl();
 
 export default function Navbar({
   onLoginClick,
   onSignupClick,
   onHomeClick,
-  onPlansClick,
-  onFreeDailyTestClick
+  onPlansClick
 }) {
+  const [user, setUser] = useState(null);
+  const [profileDropdown, setProfileDropdown] = useState(false);
+  const [profileData, setProfileData] = useState(null);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const profileSectionRef = useRef(null);
   const navigate = useNavigate();
 
-  const handleHome = () => {
-    if (onHomeClick) {
-      onHomeClick();
-      return;
+  // ✅ Get user from localStorage on mount
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
     }
+  }, []);
+
+  // ✅ Fetch profile data when dropdown opens
+  useEffect(() => {
+    if (profileDropdown && user && !profileData) {
+      fetchProfileData();
+    }
+  }, [profileDropdown]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        profileDropdown &&
+        profileSectionRef.current &&
+        !profileSectionRef.current.contains(event.target)
+      ) {
+        setProfileDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [profileDropdown]);
+
+  const fetchProfileData = async () => {
+    try {
+      setLoadingProfile(true);
+      
+      // Read token from storage
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `${API_URL}/api/user/profile`,
+        {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${token || ""}`,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch profile");
+      }
+
+      const data = await response.json();
+      // server returns { profile: { ... } }
+      setProfileData(data.profile);
+    } catch (error) {
+      console.error("Profile fetch error:", error);
+      setProfileData(null);
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
+
+  // ✅ Logout function
+  const handleLogout = () => {
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+    setUser(null);
+    setProfileData(null);
+    setProfileDropdown(false);
     navigate("/");
   };
 
-  const handlePlans = () => {
-    if (onPlansClick) {
-      onPlansClick();
-      return;
+  // ✅ Get user initials for avatar
+  const getUserInitials = () => {
+    if (user?.firstName && user?.lastName) {
+      return (user.firstName[0] + user.lastName[0]).toUpperCase();
     }
-    navigate("/test-series");
-  };
-
-  const handleFreeDailyTest = () => {
-    if (onFreeDailyTestClick) {
-      onFreeDailyTestClick();
-      return;
-    }
-    navigate("/test-series#free-daily-test");
+    return user?.firstName ? user.firstName[0].toUpperCase() : "U";
   };
 
   return (
     <header className="navbar">
       <div
         className="logo"
-        onClick={handleHome}
+        onClick={onHomeClick}
         style={{ cursor: "pointer" }}
       >
         <span className="logo-primary">Exam</span>
         <span className="logo-accent">Sarkar</span>
       </div>
-
       <nav className="nav-links">
-        <button type="button" className="nav-link" onClick={handleHome}>
+        <button type="button" className="nav-link" onClick={onHomeClick}>
           Home
         </button>
-        <button type="button" className="nav-link" onClick={handlePlans}>
-          Plans
-        </button>
-        <button type="button" className="nav-link" onClick={handleFreeDailyTest}>
-          Free Daily Test
+
+        <button type="button" className="nav-link" onClick={onPlansClick}>
+          Test Series
         </button>
 
-        <button type="button" className="nav-link">
-          Blog
-        </button>
+        {/* ✅ Show Quiz only after login */}
+        {user && (
+          <button
+            type="button"
+            className="nav-link"
+            onClick={() => navigate("/dashboard")}
+          >
+            Quiz
+          </button>
+        )}
       </nav>
 
       <div className="nav-actions">
-        <button className="login" onClick={onLoginClick}>
-          Login
-        </button>
-        <button className="signup" onClick={onSignupClick}>
-          Register
-        </button>
+        {/* ✅ LOGGED IN USER: Profile Dropdown */}
+        {user ? (
+          <div className="profile-section" ref={profileSectionRef}>
+            {/* Profile Button */}
+            <button
+              className="profile-btn"
+              onClick={() => setProfileDropdown(!profileDropdown)}
+              title={user.firstName}
+            >
+              <div className="profile-avatar">
+                {getUserInitials()}
+              </div>
+              <ChevronDown size={16} className="chevron" />
+            </button>
+
+            {/* Dropdown Menu */}
+            {profileDropdown && (
+              <div className="profile-dropdown">
+                <div className="profile-header">
+                  <div className="profile-avatar-large">
+                    {getUserInitials()}
+                  </div>
+                  <div className="profile-info">
+                    <h3 className="name">{user.firstName} {user.lastName}</h3>
+                    <p className="email">{profileData?.email || user.email}</p>
+                  </div>
+                </div>
+
+                {/* Profile Info */}
+                <div className="profile-content">
+                  {profileData ? (
+                    <>
+                      <div className="profile-detail">
+                        <span className="detail-label">First Name:</span>
+                        <span className="detail-value">{profileData.firstName}</span>
+                      </div>
+                      <div className="profile-detail">
+                        <span className="detail-label">Last Name:</span>
+                        <span className="detail-value">{profileData.lastName}</span>
+                      </div>
+                      <div className="profile-detail">
+                        <span className="detail-label">Email:</span>
+                        <span className="detail-value">{profileData.email}</span>
+                      </div>
+                      <div className="profile-detail">
+                        <span className="detail-label">Phone:</span>
+                        <span className="detail-value">{profileData.phone || "Not provided"}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="loading-text">Loading...</div>
+                  )}
+                </div>
+
+                {/* Logout Button */}
+                <div className="profile-footer">
+                  <button
+                    className="logout-btn"
+                    onClick={handleLogout}
+                  >
+                    <LogOut size={16} />
+                    Logout
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          // ✅ NOT LOGGED IN: Login/Register Buttons
+          <>
+            <button className="login" onClick={onLoginClick}>
+              Login
+            </button>
+
+            <button className="signup" onClick={onSignupClick}>
+              Register
+            </button>
+          </>
+        )}
       </div>
+
+      {/* Close dropdown when clicking outside */}
+      {profileDropdown && (
+        <div
+          className="dropdown-overlay"
+          onClick={() => setProfileDropdown(false)}
+        ></div>
+      )}
     </header>
   );
 }

@@ -48,7 +48,7 @@ export default function HeroSlider({ onSignupClick, onLoginClick }) {
         <div className="buttons">
           <button className="primary" onClick={onSignupClick}>
             <FaRocket className="btn-icon" />
-            Register Now
+            Start Free Test
           </button>
 
           <button className="secondary" onClick={onLoginClick}>

@@ -1,10 +1,10 @@
 import "./SubPlanCard.css";
 import { CheckCircle, ArrowRight } from "lucide-react";
+import { showPaymentModal } from "../Payment/PaymentModal";
 
 export default function SubPlanCard({ title, price, features, type }) {
-
   const handlePayment = () => {
-    alert(`Proceeding to ${title} plan`);
+    showPaymentModal({ plan: title, price });
   };
 
   return (

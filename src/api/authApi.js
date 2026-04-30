@@ -1,5 +1,16 @@
-// Auto-detect backend URL based on frontend's hostname (works on any device)
+// Auto-detect backend URL based on environment
 const getApiBaseUrl = () => {
+  // In Netlify production: use serverless functions
+  if (window.location.hostname.includes('.netlify.app')) {
+    return `${window.location.protocol}//${window.location.host}/.netlify/functions/api`;
+  }
+  
+  // In local development: use localhost:5000
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:5000';
+  }
+  
+  // Fallback: use current domain (useful for self-hosted)
   const protocol = window.location.protocol === "https:" ? "https:" : "http:";
   const hostname = window.location.hostname || "localhost";
   return `${protocol}//${hostname}:5000`;
@@ -41,59 +52,12 @@ export const registerUser = async ({
     confirmPassword
   });
 
-  return result.user;
+  // return both user and token so callers can persist auth token
+  return { user: result.user, token: result.token };
 };
 
 export const loginUser = async (email, password) => {
   const result = await request("/api/auth/login", { email, password });
-  return result.user;
-};
-
-const ADMIN_SESSION_KEY = "examSarkarAdminSession";
-
-export const ADMIN_TEST_ACCOUNTS = [
-  {
-    role: "super-admin",
-    label: "Super Admin",
-    email: "superadmin@examsarkar.test",
-    password: "Super@123"
-  },
-  {
-    role: "content-admin",
-    label: "Content Admin",
-    email: "contentadmin@examsarkar.test",
-    password: "Content@123"
-  }
-];
-
-export const loginAdminWithTestCredentials = async (email, password) => {
-  const account = ADMIN_TEST_ACCOUNTS.find(
-    (item) => item.email.toLowerCase() === String(email).trim().toLowerCase() && item.password === password
-  );
-
-  if (!account) {
-    throw new Error("Invalid admin credentials.");
-  }
-
-  const session = {
-    role: account.role,
-    email: account.email,
-    loggedAt: new Date().toISOString()
-  };
-
-  window.localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session));
-  return session;
-};
-
-export const getAdminSession = () => {
-  try {
-    const raw = window.localStorage.getItem(ADMIN_SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-};
-
-export const logoutAdmin = () => {
-  window.localStorage.removeItem(ADMIN_SESSION_KEY);
+  // return both user and token so callers can persist auth token
+  return { user: result.user, token: result.token };
 };

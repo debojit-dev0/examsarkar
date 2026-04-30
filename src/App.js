@@ -1,7 +1,8 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Routes, Route, useNavigate } from "react-router-dom";
 
 import Navbar from "./components/Navbar/Navbar";
+import { showPaymentModal } from "./components/Payment/PaymentModal";
 import HeroSlider from "./components/HeroSlider/HeroSlider";
 import Tiles from "./components/Tiles/Tiles";
 import WhyUs from "./components/WhyUs/WhyUs";
@@ -15,22 +16,49 @@ import SignupModal from "./components/Auth/SignupModal";
 import LoginModal from "./components/Auth/LoginModal";
 
 import TestSeriesPage from "./pages/TestSeries/TestSeriesPage";
-import AdminAuthPage from "./pages/Admin/AdminAuthPage";
+import Dashboard from "./pages/Dashboard/Dashboard";
+import PaymentPage from "./pages/PaymentPage";
 
 import "./App.css";
 
 
-// NEW WRAPPER COMPONENT (handles navigation)
+// 🔥 NEW WRAPPER COMPONENT (handles navigation)
 function AppContent() {
   const [authMode, setAuthMode] = useState(null);
 
+  // listen for global events to open auth modals (used by PaymentModal)
+  useEffect(() => {
+    const handler = (e) => {
+      const mode = e?.detail?.mode;
+      if (mode === 'login' || mode === 'signup') setAuthMode(mode);
+    };
+    window.addEventListener('openAuthModal', handler);
+    return () => window.removeEventListener('openAuthModal', handler);
+  }, []);
+
   const navigate = useNavigate();
+
+  const handleLoginClick = () => {
+    const hasSession = Boolean(localStorage.getItem("token") || localStorage.getItem("user"));
+    if (hasSession) {
+      // open payment as modal when already logged in
+      showPaymentModal({ plan: 'Subscription', price: 499 });
+      return;
+    }
+
+    setAuthMode("login");
+  };
 
   // refs for smooth scroll
   const heroRef = useRef(null);
+  const plansRef = useRef(null);
 
   const scrollToHero = () => {
     heroRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const scrollToPlans = () => {
+    plansRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   return (
@@ -44,20 +72,19 @@ function AppContent() {
             {/* NAVBAR */}
             <Navbar
               onSignupClick={() => setAuthMode("signup")}
-              onLoginClick={() => setAuthMode("login")}
+              onLoginClick={handleLoginClick}
               onHomeClick={scrollToHero}
-              onPlansClick={() => navigate("/test-series")} //  CHANGED HERE
-              onFreeDailyTestClick={() => navigate("/test-series#free-daily-test")}
+              onPlansClick={() => navigate("/test-series")} // 🔥 CHANGED HERE
             />
 
             {/* HERO */}
             <div ref={heroRef}>
               <HeroSlider
                 onSignupClick={() => setAuthMode("signup")}
-                onLoginClick={() => setAuthMode("login")}
+                onLoginClick={handleLoginClick}
               />
-              
             </div>
+
             {/* MAIN SECTIONS */}
             <Tiles />
             <WhyUs />
@@ -65,6 +92,9 @@ function AppContent() {
             <HowItWorks />
             <Testimonials />
             <CTA />
+
+            {/* SCROLL TARGET */}
+            <div ref={plansRef}></div>
 
             {/* FOOTER */}
             <Footer />
@@ -87,9 +117,8 @@ function AppContent() {
 
       {/* ================= TEST SERIES PAGE ================= */}
       <Route path="/test-series" element={<TestSeriesPage />} />
-
-      {/* ================= ADMIN PANEL ================= */}
-      <Route path="/admin" element={<AdminAuthPage />} />
+      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/payment" element={<PaymentPage />} />
 
     </Routes>
   );
