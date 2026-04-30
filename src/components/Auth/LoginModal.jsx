@@ -1,8 +1,7 @@
 import "./SignupModal.css";
 import { FaTimes } from "react-icons/fa";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom"; // ✅ ADD THIS
-import { showPaymentModal } from "../Payment/PaymentModal";
+import { useNavigate } from "react-router-dom";
 import { loginUser } from "../../api/authApi";
 
 export default function LoginModal({ isOpen, onClose, switchToSignup }) {

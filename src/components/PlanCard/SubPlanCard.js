@@ -1,5 +1,5 @@
 import "./SubPlanCard.css";
-import { CheckCircle, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { showPaymentModal } from "../Payment/PaymentModal";
 
 export default function SubPlanCard({ title, price, features, type }) {

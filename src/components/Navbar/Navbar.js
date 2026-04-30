@@ -27,7 +27,6 @@ export default function Navbar({
   const [user, setUser] = useState(null);
   const [profileDropdown, setProfileDropdown] = useState(false);
   const [profileData, setProfileData] = useState(null);
-  const [loadingProfile, setLoadingProfile] = useState(false);
   const profileSectionRef = useRef(null);
   const navigate = useNavigate();
 
@@ -44,7 +43,7 @@ export default function Navbar({
     if (profileDropdown && user && !profileData) {
       fetchProfileData();
     }
-  }, [profileDropdown]);
+  }, [profileDropdown, user, profileData]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -63,7 +62,6 @@ export default function Navbar({
 
   const fetchProfileData = async () => {
     try {
-      setLoadingProfile(true);
       
       // Read token from storage
       const token = localStorage.getItem("token");
@@ -88,8 +86,6 @@ export default function Navbar({
     } catch (error) {
       console.error("Profile fetch error:", error);
       setProfileData(null);
-    } finally {
-      setLoadingProfile(false);
     }
   };
 

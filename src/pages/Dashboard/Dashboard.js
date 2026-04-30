@@ -21,7 +21,6 @@ const Dashboard = () => {
   const [userName, setUserName] = useState('User');
   const [searchQuery, setSearchQuery] = useState('');
   const [dashboardStats, setDashboardStats] = useState(null);
-  const [loading, setLoading] = useState(true);
 
   const testSeries = [
     {
@@ -63,11 +62,10 @@ const Dashboard = () => {
 
   useEffect(() => {
     const loadData = async () => {
-      setLoading(true);
       try {
         const token = localStorage.getItem('token');
 
-        // fetch profile
+        // Fetch profile
         const profileRes = await fetch(`${API_URL}/api/user/profile`, {
           method: 'GET',
           headers: {
@@ -89,8 +87,6 @@ const Dashboard = () => {
         }
       } catch (err) {
         console.error('Dashboard load error:', err);
-      } finally {
-        setLoading(false);
       }
     };
 

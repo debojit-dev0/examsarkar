@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from "react";
 import { Routes, Route, useNavigate } from "react-router-dom";
 
 import Navbar from "./components/Navbar/Navbar";
-import { showPaymentModal } from "./components/Payment/PaymentModal";
 import HeroSlider from "./components/HeroSlider/HeroSlider";
 import Tiles from "./components/Tiles/Tiles";
 import WhyUs from "./components/WhyUs/WhyUs";
@@ -63,14 +62,9 @@ function AppContent() {
 
   // refs for smooth scroll
   const heroRef = useRef(null);
-  const plansRef = useRef(null);
 
   const scrollToHero = () => {
     heroRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  const scrollToPlans = () => {
-    plansRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   return (
@@ -107,9 +101,6 @@ function AppContent() {
               onStartFreeTest={handleStartFreeTest}
               onExploreTestSeries={() => navigate("/test-series")}
             />
-
-            {/* SCROLL TARGET */}
-            <div ref={plansRef}></div>
 
             {/* FOOTER */}
             <Footer />
