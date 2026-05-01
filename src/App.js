@@ -17,6 +17,7 @@ import LoginModal from "./components/Auth/LoginModal";
 import TestSeriesPage from "./pages/TestSeries/TestSeriesPage";
 import Dashboard from "./pages/Dashboard/Dashboard";
 import PaymentPage from "./pages/PaymentPage";
+import AdminAuthPage from "./pages/Admin/AdminAuthPage";
 
 import "./App.css";
 
@@ -125,6 +126,7 @@ function AppContent() {
       <Route path="/test-series" element={<TestSeriesPage />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/payment" element={<PaymentPage />} />
+      <Route path="/admin" element={<AdminAuthPage />} />
 
     </Routes>
   );
