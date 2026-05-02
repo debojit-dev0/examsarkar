@@ -10,8 +10,16 @@ const serverless = require('serverless-http');
 
 dotenv.config();
 
-// Import Firebase (same as backend)
-const { database } = require('../../backend/firebaseAdmin');
+// Import Firebase (same as backend) — lazy init with graceful failure
+let database = null;
+try {
+  const fb = require('../../backend/firebaseAdmin');
+  database = fb.database;
+  console.log('✓ Firebase loaded in serverless function');
+} catch (err) {
+  console.error('Firebase initialization failed in serverless function:', err && (err.message || err));
+  database = null;
+}
 
 const app = express();
 
@@ -55,6 +63,15 @@ app.use(
 
 // Body parser
 app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
+
+// If Firebase wasn't initialized, short-circuit all API routes except health
+app.use((req, res, next) => {
+  if (database) return next();
+  // Allow health check to succeed even without DB
+  if (req.path === '/api/health') return next();
+  // For other API calls, respond quickly with 503 so Vercel doesn't hang
+  return res.status(503).json({ message: 'Service unavailable: database not configured' });
+});
 
 // Razorpay client
 const getRazorpayClient = () => {
