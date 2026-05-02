@@ -3,6 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
 const dotenv = require('dotenv');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const Razorpay = require('razorpay');
 const serverless = require('serverless-http');
 
@@ -69,6 +71,105 @@ const toEmailKey = (email) =>
 const sha256 = (text) =>
   crypto.createHash("sha256").update(text || "").digest("hex");
 
+const ADMIN_TESTS_PATH = "adminTests";
+const USER_PURCHASES_PATH = "userPurchases";
+
+const normalizeList = (value) => {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (value && typeof value === "object") return Object.values(value).filter(Boolean);
+  return [];
+};
+
+const normalizePlanPeriod = (value) => {
+  const period = String(value || "").trim().toLowerCase();
+  if (period === "daily" || period === "weekly" || period === "monthly") {
+    return period;
+  }
+  return "daily";
+};
+
+const normalizePlanSubject = (value) => {
+  const subject = String(value || "").trim().toLowerCase();
+
+  if (subject === "gs" || subject === "ge") return "gs";
+  if (subject === "csat") return "csat";
+  if (subject === "combo" || subject === "both") return "combo";
+  if (subject === "all" || subject === "any" || subject === "general") return "all";
+
+  return subject || "all";
+};
+
+const buildPlanKey = (planPeriod, planSubject) => `${normalizePlanPeriod(planPeriod)}:${normalizePlanSubject(planSubject)}`;
+
+const parsePlanKey = (planKey) => {
+  const [planPeriod, planSubject] = String(planKey || "").split(":");
+  return {
+    planPeriod: normalizePlanPeriod(planPeriod),
+    planSubject: normalizePlanSubject(planSubject)
+  };
+};
+
+const getTestPeriod = (test) => normalizePlanPeriod(test?.type);
+const getTestSubject = (test) => normalizePlanSubject(test?.subject || test?.planSubject || test?.segment || "all");
+
+const getAllowedPeriods = (planPeriod) => {
+  if (planPeriod === "monthly") return ["daily", "weekly", "monthly", "daily-quiz"];
+  if (planPeriod === "weekly") return ["daily", "weekly", "daily-quiz"];
+  return ["daily", "daily-quiz"];
+};
+
+const getAllowedSubjects = (planSubject) => {
+  if (planSubject === "combo") return ["gs", "csat", "combo", "all"];
+  if (planSubject === "all") return ["gs", "csat", "combo", "all"];
+  return [planSubject, "all"];
+};
+
+const getPurchasePlan = (purchase) => {
+  const fromKey = parsePlanKey(purchase?.planKey);
+  return {
+    planPeriod: fromKey.planPeriod,
+    planSubject: fromKey.planSubject,
+    planKey: buildPlanKey(fromKey.planPeriod, fromKey.planSubject),
+    planName: purchase?.planName || `${fromKey.planPeriod[0].toUpperCase()}${fromKey.planPeriod.slice(1)} ${fromKey.planSubject.toUpperCase()}`
+  };
+};
+
+const testMatchesPurchase = (test, purchase) => {
+  if (!test || !purchase) return false;
+
+  const testPeriod = getTestPeriod(test);
+  const testSubject = getTestSubject(test);
+  const allowedPeriods = getAllowedPeriods(purchase.planPeriod);
+  const allowedSubjects = getAllowedSubjects(purchase.planSubject);
+
+  if (test.access === "free") return true;
+  if (!allowedPeriods.includes(testPeriod)) return false;
+  if (testSubject === "all") return true;
+
+  return allowedSubjects.includes(testSubject);
+};
+
+const JWT_SECRET = process.env.JWT_SECRET || process.env.REACT_APP_JWT_SECRET || "dev-jwt-secret";
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || process.env.REACT_APP_JWT_REFRESH_SECRET || JWT_SECRET;
+const JWT_EXPIRATION = process.env.JWT_EXPIRATION || "15m";
+const JWT_REFRESH_EXPIRATION = process.env.JWT_REFRESH_EXPIRATION || "7d";
+
+const generateTokens = (uid, email, firstName, lastName) => {
+  const accessToken = jwt.sign(
+    { uid, email, firstName, lastName, type: "access" },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRATION }
+  );
+
+  const refreshToken = jwt.sign(
+    { uid, email, type: "refresh" },
+    JWT_REFRESH_SECRET,
+    { expiresIn: JWT_REFRESH_EXPIRATION }
+  );
+
+  return { accessToken, refreshToken };
+};
+
 // Token verification middleware
 const verifyToken = async (req, res, next) => {
   try {
@@ -77,7 +178,12 @@ const verifyToken = async (req, res, next) => {
       return res.status(401).json({ message: "No token provided." });
     }
     const token = authHeader.substring(7);
-    const tokenData = JSON.parse(Buffer.from(token, "base64").toString("utf8"));
+    const tokenData = jwt.verify(token, JWT_SECRET);
+
+    if (tokenData.type !== "access") {
+      return res.status(401).json({ message: "Invalid token type." });
+    }
+
     req.user = tokenData;
     next();
   } catch (error) {
@@ -103,6 +209,73 @@ app.get('/api/payment/config', (req, res) => {
   } catch (err) {
     console.error('Config check error', err);
     return res.status(500).json({ configured: false });
+  }
+});
+
+app.get("/api/user/tests", verifyToken, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const [testsSnapshot, purchasesSnapshot] = await Promise.all([
+      database.ref(ADMIN_TESTS_PATH).get(),
+      database.ref(`${USER_PURCHASES_PATH}/${uid}`).get()
+    ]);
+
+    const tests = normalizeList(testsSnapshot.val());
+    const purchases = normalizeList(purchasesSnapshot.val()).filter((purchase) => purchase.status === "paid");
+    const purchasedPlans = purchases.map(getPurchasePlan).filter((purchase) => purchase.planKey);
+
+    const accessibleTests = tests.filter((test) => {
+      if (test.access === "free") return true;
+      return purchasedPlans.some((purchase) => testMatchesPurchase(test, purchase));
+    });
+
+    const planSummaries = purchasedPlans.map((purchase) => {
+      const seriesTests = accessibleTests.filter((test) => testMatchesPurchase(test, purchase));
+      return {
+        ...purchase,
+        count: seriesTests.length,
+        tests: seriesTests
+      };
+    });
+
+    return res.status(200).json({
+      purchasedPlans: planSummaries,
+      accessibleTests
+    });
+  } catch (error) {
+    console.error("User tests fetch error:", error.message);
+    return res.status(500).json({ message: "Failed to load tests" });
+  }
+});
+
+app.get("/api/admin/tests", async (req, res) => {
+  try {
+    const snapshot = await database.ref(ADMIN_TESTS_PATH).get();
+    return res.status(200).json({ tests: normalizeList(snapshot.val()) });
+  } catch (error) {
+    console.error("Load admin tests error:", error.message);
+    return res.status(500).json({ message: "Failed to load tests" });
+  }
+});
+
+app.put("/api/admin/tests", async (req, res) => {
+  try {
+    const tests = Array.isArray(req.body?.tests) ? req.body.tests : null;
+    if (!tests || tests.length === 0) {
+      return res.status(400).json({ message: "Invalid test data" });
+    }
+
+    for (const test of tests) {
+      if (!test.id || !test.title) {
+        return res.status(400).json({ message: "Each test must have id and title" });
+      }
+    }
+
+    await database.ref(ADMIN_TESTS_PATH).set(tests);
+    return res.status(200).json({ tests });
+  } catch (error) {
+    console.error("Save admin tests error:", error.message);
+    return res.status(500).json({ message: "Failed to save tests" });
   }
 });
 
@@ -140,7 +313,7 @@ app.post("/api/auth/register", async (req, res) => {
       lastName: lastName.trim(),
       email: normalizedEmail,
       phone: phone.trim(),
-      passwordHash: sha256(password),
+      passwordHash: await bcrypt.hash(password, 12),
       createdAt
     };
 
@@ -154,19 +327,19 @@ app.post("/api/auth/register", async (req, res) => {
     await database.ref(`users/${uid}`).set(userRecord);
     await emailRef.set(uid);
 
-    // Return token
-    const tokenData = {
-      uid,
-      email: normalizedEmail,
-      firstName: firstName.trim(),
-      lastName: lastName.trim()
-    };
-    const token = Buffer.from(JSON.stringify(tokenData)).toString("base64");
+    const { accessToken, refreshToken } = generateTokens(uid, normalizedEmail, firstName.trim(), lastName.trim());
+
+    await database.ref(`userTokens/${uid}/refresh`).set({
+      token: sha256(refreshToken),
+      createdAt: new Date().toISOString()
+    });
 
     return res.status(201).json({
       message: "Registration successful.",
       user: { uid, firstName: firstName.trim(), lastName: lastName.trim(), email: normalizedEmail },
-      token
+      accessToken,
+      refreshToken,
+      token: accessToken
     });
   } catch (error) {
     console.error("Register error:", error);
@@ -200,26 +373,63 @@ app.post("/api/auth/login", async (req, res) => {
 
     const user = userSnapshot.val();
 
-    if (user.passwordHash !== sha256(password)) {
+    const bcryptMatches = await bcrypt.compare(password, user.passwordHash || "");
+    const shaMatches = user.passwordHash === sha256(password);
+
+    if (!bcryptMatches && !shaMatches) {
       return res.status(401).json({ message: "Invalid email or password." });
     }
 
-    const tokenData = {
-      uid,
-      email: normalizedEmail,
-      firstName: user.firstName,
-      lastName: user.lastName
-    };
-    const token = Buffer.from(JSON.stringify(tokenData)).toString("base64");
+    const { accessToken, refreshToken } = generateTokens(uid, normalizedEmail, user.firstName, user.lastName);
+
+    await database.ref(`userTokens/${uid}/refresh`).set({
+      token: sha256(refreshToken),
+      createdAt: new Date().toISOString()
+    });
 
     return res.status(200).json({
       message: "Login successful.",
       user: { uid, firstName: user.firstName, lastName: user.lastName, email: normalizedEmail },
-      token
+      accessToken,
+      refreshToken,
+      token: accessToken
     });
   } catch (error) {
     console.error("Login error:", error);
     return res.status(500).json({ message: "Login failed." });
+  }
+});
+
+// Refresh token
+app.post("/api/auth/refresh", async (req, res) => {
+  try {
+    const { refreshToken } = req.body || {};
+    if (!refreshToken) {
+      return res.status(400).json({ message: "Refresh token is required." });
+    }
+
+    const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
+    if (decoded.type !== "refresh") {
+      return res.status(401).json({ message: "Invalid token type." });
+    }
+
+    const tokenSnapshot = await database.ref(`userTokens/${decoded.uid}/refresh`).get();
+    if (!tokenSnapshot.exists() || tokenSnapshot.val()?.token !== sha256(refreshToken)) {
+      return res.status(401).json({ message: "Token revoked or invalid." });
+    }
+
+    const userSnapshot = await database.ref(`users/${decoded.uid}`).get();
+    if (!userSnapshot.exists()) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    const user = userSnapshot.val();
+    const { accessToken } = generateTokens(decoded.uid, user.email, user.firstName, user.lastName);
+
+    return res.status(200).json({ message: "Token refreshed.", accessToken });
+  } catch (error) {
+    console.error("Refresh error:", error);
+    return res.status(401).json({ message: "Invalid or expired refresh token." });
   }
 });
 
