@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { ChevronDown, LogOut } from "lucide-react";
 import { buildApiUrl } from "../../utils/apiBaseUrl";
 
+import { handleUnauthorized } from "../../utils/apiErrorHandler";
+
 export default function Navbar({
   onLoginClick,
   onSignupClick,
@@ -37,10 +39,14 @@ export default function Navbar({
         }
       });
 
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
       if (!response.ok) {
         throw new Error("Failed to fetch profile");
       }
-
       const data = await response.json();
       // server returns { profile: { ... } }
       setProfileData(data.profile);

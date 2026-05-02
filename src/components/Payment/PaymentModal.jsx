@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import { buildApiUrl } from '../../utils/apiBaseUrl';
+import { handleUnauthorized } from '../../utils/apiErrorHandler';
 
 const RAZORPAY_KEY = process.env.REACT_APP_RAZORPAY_KEY_ID || '';
 let razorpayScriptPromise = null;
@@ -37,6 +38,88 @@ function loadScript(src) {
   return razorpayScriptPromise;
 }
 
+// Toast notification component
+function showToast(message, type = 'info') {
+  const toastContainer = document.createElement('div');
+  const isMobile = window.innerWidth < 768;
+  
+  toastContainer.style.cssText = `
+    position: fixed;
+    ${isMobile ? 'bottom: 20px; left: 50%; transform: translateX(-50%);' : 'top: 20px; right: 20px;'}
+    background: ${type === 'error' ? '#ef4444' : type === 'success' ? '#10b981' : '#3b82f6'};
+    color: white;
+    padding: 16px 24px;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 99999;
+    animation: slideIn 0.3s ease-out;
+    width: ${isMobile ? 'calc(100% - 40px)' : 'auto'};
+    max-width: ${isMobile ? '90vw' : '400px'};
+    word-wrap: break-word;
+  `;
+  toastContainer.textContent = message;
+  document.body.appendChild(toastContainer);
+
+  // Auto remove after 3 seconds
+  setTimeout(() => {
+    toastContainer.style.animation = 'slideOut 0.3s ease-out';
+    setTimeout(() => toastContainer.remove(), 300);
+  }, 3000);
+}
+
+// Add keyframe animations
+if (!document.getElementById('toast-animations')) {
+  const style = document.createElement('style');
+  style.id = 'toast-animations';
+  style.textContent = `
+    @keyframes slideIn {
+      from { 
+        transform: translateX(400px) translateY(0);
+        opacity: 0; 
+      }
+      to { 
+        transform: translateX(0) translateY(0);
+        opacity: 1; 
+      }
+    }
+    @keyframes slideOut {
+      from { 
+        transform: translateX(0) translateY(0);
+        opacity: 1; 
+      }
+      to { 
+        transform: translateX(400px) translateY(0);
+        opacity: 0; 
+      }
+    }
+    @media (max-width: 767px) {
+      @keyframes slideIn {
+        from { 
+          transform: translateX(-50%) translateY(100px);
+          opacity: 0; 
+        }
+        to { 
+          transform: translateX(-50%) translateY(0);
+          opacity: 1; 
+        }
+      }
+      @keyframes slideOut {
+        from { 
+          transform: translateX(-50%) translateY(0);
+          opacity: 1; 
+        }
+        to { 
+          transform: translateX(-50%) translateY(100px);
+          opacity: 0; 
+        }
+      }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 export function preloadRazorpayCheckout() {
   return loadScript('https://checkout.razorpay.com/v1/checkout.js');
 }
@@ -63,14 +146,22 @@ export default function PaymentModal({ plan = 'Subscription', price = 499, perio
       });
 
       const data = await res.json();
+          if (res.status === 401) {
+            handleUnauthorized();
+            return;
+          }
       if (!res.ok) {
-        alert(data.message || 'We could not create your payment order. Please try again.');
+            if (res.status === 401) {
+              handleUnauthorized();
+              return;
+            }
+        showToast(data.message || 'We could not create your payment order. Please try again.', 'error');
         return;
       }
 
       const ok = await loadScript('https://checkout.razorpay.com/v1/checkout.js');
       if (!ok) {
-        alert('Razorpay could not be loaded. Check your connection and try again.');
+        showToast('Razorpay could not be loaded. Check your connection and try again.', 'error');
         return;
       }
 
@@ -89,7 +180,8 @@ export default function PaymentModal({ plan = 'Subscription', price = 499, perio
         },
         modal: {
           ondismiss: function () {
-            // close modal on dismiss
+            // close modal on dismiss and show message
+            showToast('Payment cancelled. You can try again anytime.', 'info');
             onClose();
           }
         }
@@ -99,7 +191,7 @@ export default function PaymentModal({ plan = 'Subscription', price = 499, perio
       rzp.open();
     } catch (err) {
       console.error(err);
-      alert('Something went wrong while starting the payment. Please try again.');
+      showToast('Something went wrong while starting the payment. Please try again.', 'error');
     }
   }, [isLoggedIn, onClose, price, resolvedPlanKey, resolvedPlanName]);
 
@@ -153,14 +245,19 @@ export async function startPaymentCheckout({ plan, price, period = 'daily', plan
     });
 
     const data = await res.json();
+    if (res.status === 401) {
+      handleUnauthorized();
+      return;
+    }
+
     if (!res.ok) {
-      alert(data.message || 'We could not create your payment order. Please try again.');
+      showToast(data.message || 'We could not create your payment order. Please try again.', 'error');
       return;
     }
 
     const ok = await loadScript('https://checkout.razorpay.com/v1/checkout.js');
     if (!ok) {
-      alert('Razorpay could not be loaded. Check your connection and try again.');
+      showToast('Razorpay could not be loaded. Check your connection and try again.', 'error');
       return;
     }
 
@@ -177,7 +274,8 @@ export async function startPaymentCheckout({ plan, price, period = 'daily', plan
       },
       modal: {
         ondismiss: function () {
-          // User cancelled payment - no action needed, they can try again
+          // User cancelled payment - show friendly message
+          showToast('Payment cancelled. You can try again anytime.', 'info');
         }
       }
     };
@@ -186,7 +284,7 @@ export async function startPaymentCheckout({ plan, price, period = 'daily', plan
     rzp.open();
   } catch (err) {
     console.error(err);
-    alert('Something went wrong while starting the payment. Please try again.');
+    showToast('Something went wrong while starting the payment. Please try again.', 'error');
   }
 }
 

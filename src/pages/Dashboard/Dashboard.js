@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, ChevronRight, Radio } from 'lucide-react';
 import './Dashboard.css';
 import { buildApiUrl } from '../../utils/apiBaseUrl';
+import { handleUnauthorized } from '../../utils/apiErrorHandler';
 import Navbar from "../../components/Navbar/Navbar";
 import { useNavigate } from 'react-router-dom';
 
@@ -20,6 +21,8 @@ const Dashboard = () => {
     { name: 'User5', avatar: '👨' },
   ];
 
+
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -34,6 +37,11 @@ const Dashboard = () => {
           }
         });
 
+        if (profileRes.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+
         if (profileRes.ok) {
           const profileData = await profileRes.json();
           setUserName((profileData.profile && profileData.profile.firstName) || 'User');
@@ -46,6 +54,7 @@ const Dashboard = () => {
           setDashboardStats(statsJson.stats || null);
         }
 
+
         // FETCH UNLOCKED TESTS FOR THE CURRENT USER
         if (accessToken) {
           const testsRes = await fetch(buildApiUrl('/api/user/tests'), {
@@ -55,6 +64,11 @@ const Dashboard = () => {
               'Content-Type': 'application/json'
             }
           });
+
+          if (testsRes.status === 401) {
+            handleUnauthorized();
+            return;
+          }
 
           if (testsRes.ok) {
             const testsJson = await testsRes.json();
