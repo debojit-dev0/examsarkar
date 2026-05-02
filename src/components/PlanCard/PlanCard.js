@@ -1,7 +1,11 @@
 import "./PlanCard.css";
 import SubPlanCard from "./SubPlanCard";
 
-export default function PlanCard({ title, highlight }) {
+export default function PlanSection({ title, highlight }) {
+
+  const isDaily = title === "Daily Plan";
+  const isWeekly = title === "Weekly Plan";
+
   return (
     <div className={`plan-card ${highlight ? "highlight" : ""}`}>
 
@@ -11,16 +15,37 @@ export default function PlanCard({ title, highlight }) {
 
       <div className="sub-container">
 
+        {/* GS */}
         <SubPlanCard
-          title="CSAT"
-          price={title === "Daily Plan" ? 99 : title === "Weekly Plan" ? 299 : 799}
-          features={["Practice Tests", "Time Analysis"]}
+          title="GS"
+          price={isDaily ? 99 : isWeekly ? 599 : 2499}
+          features={[
+            "Topic-wise Tests",
+            "Current Affairs MCQs",
+            "Performance Tracking"
+          ]}
         />
 
+        {/* CSAT */}
         <SubPlanCard
-          title="GS Prelims"
-          price={title === "Daily Plan" ? 99 : title === "Weekly Plan" ? 299 : 799}
-          features={["Topic-wise Tests", "Performance Insights"]}
+          title="CSAT"
+          price={isDaily ? 99 : isWeekly ? 599 : 2499}
+          features={[
+            "Practice Tests",
+            "Time Analysis",
+            "Aptitude Practice"
+          ]}
+        />
+
+        {/* 🔥 COMBO */}
+        <SubPlanCard
+          title="COMBO"
+          price={isDaily ? 149 : isWeekly ? 999 : 3999}
+          features={[
+            "GS + CSAT Included",
+            "Full Test Access",
+            "Advanced Analytics"
+          ]}
         />
 
       </div>

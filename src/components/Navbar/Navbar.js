@@ -119,7 +119,7 @@ export default function Navbar({
             className="nav-link"
             onClick={() => navigate("/dashboard")}
           >
-            Quiz
+            Dashboard
           </button>
         )}
       </nav>

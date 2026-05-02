@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Search, ChevronRight, Radio } from 'lucide-react';
 import './Dashboard.css';
 import { buildApiUrl } from '../../utils/apiBaseUrl';
+import Navbar from "../../components/Navbar/Navbar";
+import { useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
+  const navigate = useNavigate(); // ✅ REQUIRED
   const [userName, setUserName] = useState('User');
   const [searchQuery, setSearchQuery] = useState('');
   const [dashboardStats, setDashboardStats] = useState(null);
@@ -88,8 +91,16 @@ const Dashboard = () => {
     { day: 'Sat', completed: true },
     { day: 'Sun', completed: false },
   ];
+   
 
   return (
+    <>
+      {/* ✅ Navbar added correctly */}
+      <Navbar
+        onHomeClick={() => navigate("/")}
+        onPlansClick={() => navigate("/test-series")}
+      />
+    
     <div className="dashboard-wrapper">
       <div className="dashboard-container">
         {/* Left Section */}
@@ -312,6 +323,7 @@ const Dashboard = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 

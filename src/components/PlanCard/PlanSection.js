@@ -18,17 +18,21 @@ export default function PlanSection({ title, price, type, highlight }) {
         "1 Free Sectional Test",
         subject === "CSAT"
           ? "Basic Aptitude Practice"
-          : "Daily Current Affairs MCQs"
+          : subject === "GS"
+          ? "Daily Current Affairs MCQs"
+          : "GS + CSAT Combined Access"
       ];
     }
 
     if (type === "weekly") {
       return [
         ...common,
-        "2 Free Tests (1 Sectional + 1 Mini Mock)",
+        "2 Free Tests (Sectional + Mini Mock)",
         subject === "CSAT"
           ? "Timed CSAT Practice Sets"
-          : "Topic-wise GS Tests",
+          : subject === "GS"
+          ? "Topic-wise GS Tests"
+          : "Full GS + CSAT Access",
         "Detailed Performance Analysis",
         "Weak Area Identification"
       ];
@@ -40,7 +44,9 @@ export default function PlanSection({ title, price, type, highlight }) {
         "4 Full-Length Mock Tests",
         subject === "CSAT"
           ? "Advanced CSAT Drills"
-          : "Complete GS Coverage",
+          : subject === "GS"
+          ? "Complete GS Coverage"
+          : "Complete GS + CSAT Bundle",
         "All India Ranking",
         "Detailed Analytics Dashboard",
         "Exam Simulation Mode",
@@ -56,6 +62,26 @@ export default function PlanSection({ title, price, type, highlight }) {
     if (type === "daily") return "Start your preparation";
     if (type === "weekly") return "Most students prefer this";
     return "Complete UPSC-level preparation";
+  };
+
+  // 🔥 PRICE LOGIC
+  const getPrice = (subject) => {
+    if (type === "daily") {
+      if (subject === "COMBO") return 149;
+      return 99;
+    }
+
+    if (type === "weekly") {
+      if (subject === "COMBO") return 999;
+      return 599;
+    }
+
+    if (type === "monthly") {
+      if (subject === "COMBO") return 3999;
+      return 2499;
+    }
+
+    return price;
   };
 
   return (
@@ -76,19 +102,28 @@ export default function PlanSection({ title, price, type, highlight }) {
         <div className="best-tag">Best Value</div>
       )}
 
-      {/* CARDS */}
+      {/* 🔥 CARDS (NOW 3) */}
       <div className="sub-row">
 
+        {/* GS */}
+        <SubPlanCard
+          title="GS"
+          price={getPrice("GS")}
+          features={getFeatures(type, "GS")}
+        />
+
+        {/* CSAT */}
         <SubPlanCard
           title="CSAT"
-          price={price}
+          price={getPrice("CSAT")}
           features={getFeatures(type, "CSAT")}
         />
 
+        {/* 🔥 COMBO */}
         <SubPlanCard
-          title="GS Prelims"
-          price={price}
-          features={getFeatures(type, "GS")}
+          title="COMBO"
+          price={getPrice("COMBO")}
+          features={getFeatures(type, "COMBO")}
         />
 
       </div>
