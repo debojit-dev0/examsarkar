@@ -3,10 +3,6 @@
   "outputDirectory": "build",
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/[...all].js"
-    },
-    {
       "handle": "filesystem"
     },
     {
