@@ -1,6 +1,6 @@
 import "./SubPlanCard.css";
 import { ArrowRight } from "lucide-react";
-import { preloadRazorpayCheckout, showPaymentModal } from "../Payment/PaymentModal";
+import { preloadRazorpayCheckout, startPaymentCheckout } from "../Payment/PaymentModal";
 
 export default function SubPlanCard({ title, price, features, type }) {
   const handlePayment = () => {
@@ -15,7 +15,7 @@ export default function SubPlanCard({ title, price, features, type }) {
       return;
     }
 
-    showPaymentModal({ plan: title, price, period: planPeriod, planKey, planName });
+    startPaymentCheckout({ plan: title, price, period: planPeriod, planKey, planName });
   };
 
   return (

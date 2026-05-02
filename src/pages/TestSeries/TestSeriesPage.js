@@ -6,7 +6,7 @@ import Navbar from "../../components/Navbar/Navbar";
 import PlanSection from "../../components/PlanCard/PlanSection";
 import SignupModal from "../../components/Auth/SignupModal";
 import LoginModal from "../../components/Auth/LoginModal";
-import { preloadRazorpayCheckout, showPaymentModal } from "../../components/Payment/PaymentModal";
+import { preloadRazorpayCheckout, startPaymentCheckout } from "../../components/Payment/PaymentModal";
 
 export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
   const navigate = useNavigate();
@@ -31,7 +31,7 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
     const handler = (e) => {
       const planData = e?.detail?.plan;
       if (!planData?.title || !planData?.price) return;
-      showPaymentModal({
+      startPaymentCheckout({
         plan: planData.title,
         price: planData.price,
         period: planData.type || 'daily',

@@ -27,7 +27,6 @@ export default function PaymentPage() {
   const planName = params.get("planName") || `${planPeriod.charAt(0).toUpperCase() + planPeriod.slice(1)} ${plan}`;
   const priceParam = params.get("price");
   const priceNumber = priceParam ? Number(priceParam) : null; // rupees
-  const autoPay = params.get("autoPay") === "1";
 
   useEffect(() => {
     // if user already paid, redirect to dashboard
@@ -47,16 +46,6 @@ export default function PaymentPage() {
       } catch (e) {}
     })();
   }, [navigate]);
-
-  useEffect(() => {
-    if (!autoPay) return;
-
-    const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
-    if (!token || loading) return;
-
-    handlePay();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoPay]);
 
   const handlePay = async () => {
     setLoading(true);
