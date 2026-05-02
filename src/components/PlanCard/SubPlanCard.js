@@ -1,42 +1,21 @@
 import "./SubPlanCard.css";
 import { ArrowRight } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { preloadRazorpayCheckout } from "../Payment/PaymentModal";
+import { preloadRazorpayCheckout, showPaymentModal } from "../Payment/PaymentModal";
 
 export default function SubPlanCard({ title, price, features, type }) {
-  const navigate = useNavigate();
-
-  const buildPaymentPath = () => {
-    const planPeriod = type || "daily";
+  const handlePayment = () => {
+    const isLoggedIn = Boolean(localStorage.getItem('token') || localStorage.getItem('user'));
+    const planPeriod = type || 'daily';
     const planSubject = title.toLowerCase();
     const planKey = `${planPeriod}:${planSubject}`;
     const planName = `${planPeriod.charAt(0).toUpperCase() + planPeriod.slice(1)} ${title}`;
 
-    const params = new URLSearchParams({
-      plan: title,
-      price: String(price),
-      period: planPeriod,
-      planKey,
-      planName,
-      autoPay: "1"
-    });
-
-    return `/payment?${params.toString()}`;
-  };
-
-  const handlePayment = () => {
-    const isLoggedIn = Boolean(localStorage.getItem('token') || localStorage.getItem('user'));
-
     if (!isLoggedIn) {
-      const planPeriod = type || 'daily';
-      const planSubject = title.toLowerCase();
-      const planKey = `${planPeriod}:${planSubject}`;
-      const planName = `${planPeriod.charAt(0).toUpperCase() + planPeriod.slice(1)} ${title}`;
       window.dispatchEvent(new CustomEvent('openAuthModal', { detail: { mode: 'login', plan: { title, price, type: planPeriod, planKey, planName } } }));
       return;
     }
 
-    navigate(buildPaymentPath(), { replace: true });
+    showPaymentModal({ plan: title, price, period: planPeriod, planKey, planName });
   };
 
   return (

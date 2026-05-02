@@ -43,7 +43,6 @@ export function preloadRazorpayCheckout() {
 
 export default function PaymentModal({ plan = 'Subscription', price = 499, period = 'daily', planKey = '', planName = '', onClose = () => {} }) {
   const [status, setStatus] = useState(null);
-  const autoOpenedRef = useRef(false);
 
   const isLoggedIn = Boolean(localStorage.getItem('accessToken') || localStorage.getItem('refreshToken'));
 
@@ -146,18 +145,40 @@ export default function PaymentModal({ plan = 'Subscription', price = 499, perio
     }
   }, [isLoggedIn, onClose, price, resolvedPlanKey, resolvedPlanName]);
 
-  useEffect(() => {
-    if (!isLoggedIn || autoOpenedRef.current) return;
-    autoOpenedRef.current = true;
+  // Do not auto-open checkout on mount. Require explicit user action (click "Pay").
 
-    const timer = setTimeout(() => {
-      handlePay();
-    }, 100);
+  // Initial view: when there's no status, render a simple payment card
+  // that requires the user to click Pay. Status panel is shown only
+  // after a payment attempt (success, failure, cancelled).
+  if (!status) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(2, 6, 23, 0.64)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <div style={{ width: 'min(520px, 100%)', borderRadius: 24, background: '#ffffff', boxShadow: '0 30px 80px rgba(15, 23, 42, 0.28)', border: '1px solid rgba(226,232,240,0.5)', overflow: 'hidden' }}>
+          <div style={{ padding: '28px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h2 style={{ margin: 0 }}>Complete Payment</h2>
+              <button onClick={onClose} aria-label="Close payment" style={{ border: 'none', background: 'transparent', fontSize: 20, cursor: 'pointer', color: '#64748b' }}>✕</button>
+            </div>
 
-    return () => clearTimeout(timer);
-  }, [handlePay, isLoggedIn]);
+            <p style={{ marginTop: 0, color: '#475569' }}>{resolvedPlanName}</p>
 
-  if (!status) return null;
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0' }}>
+              <strong style={{ fontSize: 18 }}>₹{price}</strong>
+              {!isLoggedIn ? (
+                <div style={{ color: '#ef4444' }}>Please login to continue</div>
+              ) : (
+                <button onClick={() => { showStatus({ type: 'processing' }); handlePay(); }} style={{ padding: '10px 18px', borderRadius: 12, border: 'none', background: '#2563eb', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+                  Pay ₹{price}
+                </button>
+              )}
+            </div>
+
+            <div style={{ color: '#94a3b8', fontSize: 13 }}>Payment is securely processed via Razorpay.</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const toneStyles = status.tone === 'warning'
     ? {
