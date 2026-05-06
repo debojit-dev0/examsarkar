@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { FiKey, FiLogIn, FiMail } from "react-icons/fi";
+import { loginAdminWithTestCredentials, setAdminSession } from "../../api/authApi";
 import "./AdminLoginPage.css";
 
 export default function AdminLoginPage({ onLoginSuccess }) {
@@ -10,8 +11,18 @@ export default function AdminLoginPage({ onLoginSuccess }) {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    setError("⚠️ Admin authentication has been disabled for security reasons. Hardcoded credentials are no longer supported. Please implement a proper backend-based admin authentication system.");
-    setIsSubmitting(false);
+    setError("");
+    setIsSubmitting(true);
+
+    try {
+      const session = await loginAdminWithTestCredentials(email, password);
+      setAdminSession(session);
+      onLoginSuccess(session);
+    } catch (loginError) {
+      setError(loginError.message || "Admin login failed. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -31,15 +42,15 @@ export default function AdminLoginPage({ onLoginSuccess }) {
           <div className="credential-list">
             <article className="credential-card" style={{ background: '#fff3cd', borderLeft: '4px solid #ff6b6b' }}>
               <h3>⚠️ Security Notice</h3>
-              <p>Hardcoded admin credentials have been disabled for security reasons.</p>
-              <p>Please configure a proper backend-based admin authentication system.</p>
+              <p>Admin login is now backed by Firebase Realtime Database.</p>
+              <p>Use the admin credential stored in the <strong>adminAccounts</strong> node.</p>
             </article>
           </div>
         </section>
 
         <section className="admin-login-card">
           <h2>
-            <FiLogIn /> Admin Sign In (Disabled)
+            <FiLogIn /> Admin Sign In
           </h2>
 
           <form onSubmit={handleSubmit} className="admin-login-form">

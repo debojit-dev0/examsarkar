@@ -7,13 +7,39 @@ import PlanSection from "../../components/PlanCard/PlanSection";
 import SignupModal from "../../components/Auth/SignupModal";
 import LoginModal from "../../components/Auth/LoginModal";
 import { preloadRazorpayCheckout, startPaymentCheckout } from "../../components/Payment/PaymentModal";
+import { loadAdminTests } from "../../utils/adminTestsStore";
 
 export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
   const navigate = useNavigate();
   const [authMode, setAuthMode] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(null); // Store which plan user selected
+  const [freeTests, setFreeTests] = useState([]);
+  const [selectedTestId, setSelectedTestId] = useState(null); // Track which test triggered auth
 
-  // Listen for global events to open auth modals (used by plan cards)
+  const isLoggedIn = () => {
+    return Boolean(localStorage.getItem("token") || localStorage.getItem("user"));
+  };
+
+  const handleAttemptQuiz = (testId) => {
+    if (!isLoggedIn()) {
+      // Store the test ID and show login modal
+      setSelectedTestId(testId);
+      setAuthMode("login");
+      return;
+    }
+
+    // Navigate to quiz page with test ID
+    navigate(`/test/${testId}`, { state: { testId } });
+  };
+
+  // After modal closes, check if logged in and navigate to test if needed
+  useEffect(() => {
+    if (authMode === null && selectedTestId && isLoggedIn()) {
+      // User just logged in and selected a test
+      navigate(`/test/${selectedTestId}`, { state: { testId: selectedTestId } });
+      setSelectedTestId(null);
+    }
+  }, [authMode, selectedTestId, navigate]);
   useEffect(() => {
     const handler = (e) => {
       const mode = e?.detail?.mode;
@@ -76,6 +102,54 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
     preloadRazorpayCheckout();
   }, []);
 
+  useEffect(() => {
+    let isActive = true;
+
+    const fetchFreeTests = async () => {
+      try {
+        const tests = await loadAdminTests();
+        console.log("[TestSeries] All tests loaded:", tests);
+        
+        if (!isActive) return;
+
+        const filtered = (Array.isArray(tests) ? tests : [])
+          .filter((test) => {
+            const isFree = test?.access === "free";
+            console.log(`[TestSeries] Test "${test?.testName}": access=${test?.access}, isFree=${isFree}`);
+            return isFree;
+          })
+          .sort((left, right) => {
+            const leftTime = new Date(left?.createdAt || 0).getTime();
+            const rightTime = new Date(right?.createdAt || 0).getTime();
+            return rightTime - leftTime;
+          });
+        
+        console.log("[TestSeries] Filtered free tests:", filtered);
+        setFreeTests(filtered);
+      } catch (error) {
+        console.error("[TestSeries] Failed to load free tests:", error);
+        if (isActive) {
+          setFreeTests([]);
+        }
+      }
+    };
+
+    fetchFreeTests();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  const formatSubject = (subject) => {
+    const normalized = String(subject || "all").toLowerCase();
+    if (normalized === "ge") return "GS / GE";
+    if (normalized === "gs") return "GS / GE";
+    if (normalized === "csat") return "CSAT";
+    if (normalized === "combo") return "COMBO";
+    return normalized.toUpperCase();
+  };
+
   return (
     <>
       {/* ✅ Navbar now connected to App.js modal system */}
@@ -130,6 +204,43 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
             Built for serious aspirants • Based on real UPSC pattern
           </p>
 
+          {/* FREE TESTS AT TOP */}
+          <section className="free-tests-section">
+            <div className="free-tests-header">
+              <h2>Free Tests Uploaded by Admin</h2>
+              <p>
+                {freeTests.length > 0
+                  ? "These free tests are available now."
+                  : "No free tests uploaded yet."}
+              </p>
+            </div>
+
+            {freeTests.length > 0 ? (
+              <div className="free-tests-grid">
+                {freeTests.map((test) => (
+                  <article key={test.id} className="free-test-card">
+                    <div className="free-test-topline">
+                      <span className="free-badge">FREE</span>
+                      <span className="free-test-type">{String(test.type || "daily").toUpperCase()}</span>
+                    </div>
+                    <h3>{test.testName || "Untitled Test"}</h3>
+                    <p>{formatSubject(test.subject)}</p>
+                    <div className="free-test-meta">
+                      <span>{test.questionCount || 0} questions</span>
+                      <span>{test.date ? `Date: ${test.date}` : "Always available"}</span>
+                    </div>
+                    <button 
+                      className="attempt-quiz-btn"
+                      onClick={() => handleAttemptQuiz(test.id)}
+                    >
+                      Attempt Quiz →
+                    </button>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+          </section>
+
           {/* PLANS */}
           <PlanSection title="Daily Plan" price={99} type="daily" />
           <PlanSection title="Weekly Plan" price={299} type="weekly" />
@@ -141,14 +252,18 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
       {/* AUTH MODALS */}
       <SignupModal
         isOpen={authMode === "signup"}
-        onClose={() => setAuthMode(null)}
+        onClose={() => {
+          setAuthMode(null);
+        }}
         switchToLogin={() => setAuthMode("login")}
         planData={selectedPlan}
       />
 
       <LoginModal
         isOpen={authMode === "login"}
-        onClose={() => setAuthMode(null)}
+        onClose={() => {
+          setAuthMode(null);
+        }}
         switchToSignup={() => setAuthMode("signup")}
         planData={selectedPlan}
       />

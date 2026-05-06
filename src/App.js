@@ -16,6 +16,7 @@ const SignupModal = lazy(() => import("./components/Auth/SignupModal"));
 const LoginModal = lazy(() => import("./components/Auth/LoginModal"));
 
 const TestSeriesPage = lazy(() => import("./pages/TestSeries/TestSeriesPage"));
+const TestPage = lazy(() => import("./pages/TestPage/TestPage"));
 const Dashboard = lazy(() => import("./pages/Dashboard/Dashboard"));
 const PaymentPage = lazy(() => import("./pages/PaymentPage"));
 const AdminAuthPage = lazy(() => import("./pages/Admin/AdminAuthPage"));
@@ -147,7 +148,11 @@ function AppContent() {
       />
 
       {/* ================= TEST SERIES PAGE ================= */}
-      <Route path="/test-series" element={<TestSeriesPage />} />
+      <Route path="/test-series" element={<TestSeriesPage onLoginClick={handleLoginClick} onSignupClick={() => setAuthMode("signup")} />} />
+      
+      {/* ================= TEST QUIZ PAGE ================= */}
+      <Route path="/test/:testId" element={<TestPage onLoginClick={handleLoginClick} onSignupClick={() => setAuthMode("signup")} />} />
+      
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/payment" element={<PaymentPage />} />
       <Route path="/admin" element={<AdminAuthPage />} />

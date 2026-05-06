@@ -10,16 +10,8 @@ const serverless = require('serverless-http');
 
 dotenv.config();
 
-// Import Firebase (same as backend) — lazy init with graceful failure
-let database = null;
-try {
-  const fb = require('../../backend/firebaseAdmin');
-  database = fb.database;
-  console.log('✓ Firebase loaded in serverless function');
-} catch (err) {
-  console.error('Firebase initialization failed in serverless function:', err && (err.message || err));
-  database = null;
-}
+// Import Firebase (same as backend)
+const { database } = require('../../backend/firebaseAdmin');
 
 const app = express();
 
@@ -37,7 +29,6 @@ const isAllowedOrigin = (origin) => {
       "localhost",
       "127.0.0.1",
       "examsarkar.com",
-      "examsarkar.vercel.app",
       "www.examsarkar.com"
     ]);
     return (
@@ -63,15 +54,6 @@ app.use(
 
 // Body parser
 app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
-
-// If Firebase wasn't initialized, short-circuit all API routes except health
-app.use((req, res, next) => {
-  if (database) return next();
-  // Allow health check to succeed even without DB
-  if (req.path === '/api/health') return next();
-  // For other API calls, respond quickly with 503 so Vercel doesn't hang
-  return res.status(503).json({ message: 'Service unavailable: database not configured' });
-});
 
 // Razorpay client
 const getRazorpayClient = () => {
@@ -299,7 +281,6 @@ app.put("/api/admin/tests", async (req, res) => {
 
 // Register endpoint
 app.post("/api/auth/register", async (req, res) => {
-  console.log('[api] POST /api/auth/register - received');
   try {
     const {
       firstName,
@@ -309,8 +290,6 @@ app.post("/api/auth/register", async (req, res) => {
       password,
       confirmPassword
     } = req.body || {};
-
-    console.log('[api] /api/auth/register - payload keys', Object.keys(req.body || {}));
 
     if (!firstName || !lastName || !email || !phone || !password || !confirmPassword) {
       return res.status(400).json({ message: "All fields are required." });
@@ -340,7 +319,6 @@ app.post("/api/auth/register", async (req, res) => {
 
     // Check if email exists
     const emailSnapshot = await emailRef.get();
-    console.log('[api] /api/auth/register - email snapshot exists', emailSnapshot.exists());
     if (emailSnapshot.exists()) {
       return res.status(400).json({ message: "This email is already registered." });
     }
@@ -371,11 +349,8 @@ app.post("/api/auth/register", async (req, res) => {
 
 // Login endpoint
 app.post("/api/auth/login", async (req, res) => {
-  console.log('[api] POST /api/auth/login - received');
   try {
     const { email, password } = req.body || {};
-
-    console.log('[api] /api/auth/login - payload keys', Object.keys(req.body || {}));
 
     if (!email || !password) {
       return res.status(400).json({ message: "Email and password are required." });
@@ -384,7 +359,6 @@ app.post("/api/auth/login", async (req, res) => {
     const normalizedEmail = email.trim().toLowerCase();
     const emailKey = toEmailKey(normalizedEmail);
     const uidSnapshot = await database.ref(`usersByEmail/${emailKey}`).get();
-    console.log('[api] /api/auth/login - uidSnapshot exists', uidSnapshot.exists());
 
     if (!uidSnapshot.exists()) {
       return res.status(401).json({ message: "Invalid email or password." });
@@ -392,7 +366,6 @@ app.post("/api/auth/login", async (req, res) => {
 
     const uid = uidSnapshot.val();
     const userSnapshot = await database.ref(`users/${uid}`).get();
-    console.log('[api] /api/auth/login - userSnapshot exists', userSnapshot.exists());
 
     if (!userSnapshot.exists()) {
       return res.status(401).json({ message: "Invalid email or password." });
@@ -401,7 +374,6 @@ app.post("/api/auth/login", async (req, res) => {
     const user = userSnapshot.val();
 
     const bcryptMatches = await bcrypt.compare(password, user.passwordHash || "");
-    console.log('[api] /api/auth/login - bcrypt compare done');
     const shaMatches = user.passwordHash === sha256(password);
 
     if (!bcryptMatches && !shaMatches) {
@@ -513,21 +485,9 @@ app.post("/api/payment/create-order", verifyToken, async (req, res) => {
       return res.status(503).json({ message: "Payment service is not configured yet." });
     }
 
-    const { amount, planKey, planName } = req.body || {};
+    const { amount } = req.body || {};
     if (!amount || typeof amount !== "number") {
       return res.status(400).json({ message: "Amount (in paise) is required." });
-    }
-
-    if (!planKey || !/^(daily|weekly|monthly):(gs|csat|combo|all)$/.test(planKey)) {
-      return res.status(400).json({ message: "Invalid plan key." });
-    }
-
-    if (!planName || String(planName).trim().length > 100) {
-      return res.status(400).json({ message: "Invalid plan name." });
-    }
-
-    if (amount < 100 || amount > 500000) {
-      return res.status(400).json({ message: "Invalid amount." });
     }
 
     const uid = req.user.uid;
@@ -539,11 +499,7 @@ app.post("/api/payment/create-order", verifyToken, async (req, res) => {
       amount,
       currency: "INR",
       receipt,
-      payment_capture: 1,
-      notes: {
-        planKey,
-        planName
-      }
+      payment_capture: 1
     });
 
     await database.ref(`payments/${order.id}`).set({
@@ -552,18 +508,11 @@ app.post("/api/payment/create-order", verifyToken, async (req, res) => {
       amount: order.amount,
       currency: order.currency,
       receipt: order.receipt,
-      planKey,
-      planName,
       status: "created",
       createdAt: new Date().toISOString()
     });
 
-    await database.ref(`userPayments/${uid}/${order.id}`).set({
-      status: "created",
-      createdAt: new Date().toISOString(),
-      planKey,
-      planName
-    });
+    await database.ref(`userPayments/${uid}/${order.id}`).set({ status: "created", createdAt: new Date().toISOString() });
 
     return res.status(201).json({ message: "Order created", order, key_id: process.env.RAZORPAY_KEY_ID });
   } catch (error) {
@@ -589,32 +538,12 @@ app.post("/api/payment/verify", verifyToken, async (req, res) => {
     }
 
     const paymentRef = database.ref(`payments/${razorpay_order_id}`);
-    const paidAt = new Date().toISOString();
-    await paymentRef.update({ status: "paid", paymentId: razorpay_payment_id, paidAt });
+    await paymentRef.update({ status: "paid", paymentId: razorpay_payment_id, paidAt: new Date().toISOString() });
 
     const p = await paymentRef.get();
     const uid = p.val()?.uid;
-    const planKey = p.val()?.planKey || null;
-    const planName = p.val()?.planName || null;
     if (uid) {
-      await database.ref(`userPayments/${uid}/${razorpay_order_id}`).update({
-        status: "paid",
-        paymentId: razorpay_payment_id,
-        paidAt,
-        planKey,
-        planName
-      });
-
-      if (planKey) {
-        await database.ref(`userPurchases/${uid}/${razorpay_order_id}`).set({
-          orderId: razorpay_order_id,
-          paymentId: razorpay_payment_id,
-          paidAt,
-          planKey,
-          planName,
-          status: "paid"
-        });
-      }
+      await database.ref(`userPayments/${uid}/${razorpay_order_id}`).update({ status: "paid", paymentId: razorpay_payment_id, paidAt: new Date().toISOString() });
     }
 
     return res.status(200).json({ success: true });

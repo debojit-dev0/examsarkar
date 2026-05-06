@@ -145,6 +145,115 @@ body {
     color: #64748b;
     margin-bottom: 50px;
   }
+
+  /* ========================= */
+  /* FREE TESTS */
+  /* ========================= */
+  .free-tests-section {
+    margin-top: 56px;
+    padding: 28px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 22px;
+    background: rgba(15, 23, 42, 0.72);
+    backdrop-filter: blur(12px);
+  }
+
+  .free-tests-header h2 {
+    margin: 0;
+    font-size: 26px;
+    color: #e2e8f0;
+  }
+
+  .free-tests-header p {
+    margin: 10px 0 0;
+    color: #94a3b8;
+  }
+
+  .free-tests-grid {
+    margin-top: 22px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+  }
+
+  .free-test-card {
+    padding: 18px;
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.98));
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    box-shadow: 0 18px 40px rgba(2, 6, 23, 0.3);
+  }
+
+  .free-test-topline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .free-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #22c55e, #86efac);
+    color: #052e16;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+
+  .free-test-type {
+    color: #93c5fd;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+  }
+
+  .free-test-card h3 {
+    margin: 0;
+    color: #f8fafc;
+    font-size: 20px;
+  }
+
+  .free-test-card p {
+    margin: 10px 0 16px;
+    color: #cbd5e1;
+  }
+
+  .free-test-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    color: #94a3b8;
+    font-size: 13px;
+  }
+
+  .attempt-quiz-btn {
+    width: 100%;
+    margin-top: 16px;
+    padding: 12px 18px;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .attempt-quiz-btn:hover {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+  }
+
+  .attempt-quiz-btn:active {
+    transform: translateY(0);
+  }
   
   /* ========================= */
   /* BACKGROUND GLOW */

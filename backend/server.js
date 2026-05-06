@@ -200,6 +200,7 @@ const toEmailKey = (email) =>
 
 const ADMIN_TESTS_PATH = "adminTests";
 const USER_PURCHASES_PATH = "userPurchases";
+const USER_TEST_ATTEMPTS_PATH = "userTestAttempts";
 
 const normalizeList = (value) => {
   if (Array.isArray(value)) return value.filter(Boolean);
@@ -264,6 +265,18 @@ const getPurchasePlan = (purchase) => {
     planName: purchase?.planName || `${fromKey.planPeriod[0].toUpperCase()}${fromKey.planPeriod.slice(1)} ${fromKey.planSubject.toUpperCase()}`
   };
 };
+
+const ADMIN_ACCOUNTS_PATH = "adminAccounts";
+
+const getAdminEmailKey = (email) => toEmailKey(email);
+
+const buildAdminSession = (adminRecord) => ({
+  uid: adminRecord.uid,
+  email: adminRecord.email,
+  firstName: adminRecord.firstName || "",
+  lastName: adminRecord.lastName || "",
+  role: adminRecord.role || "content-admin"
+});
 
 const testMatchesPurchase = (test, purchase) => {
   if (!test || !purchase) return false;
@@ -542,6 +555,54 @@ app.post("/api/auth/refresh", [
   }
 });
 
+// ============ ADMIN AUTH ENDPOINTS ============
+
+app.post(
+  "/api/admin/login",
+  authLimiter,
+  [
+    body("email").isEmail().normalizeEmail(),
+    body("password").isLength({ min: 8 })
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ message: "Invalid credentials" });
+      }
+
+      const { email, password } = req.body;
+      const normalizedEmail = email.trim().toLowerCase();
+      const adminKey = getAdminEmailKey(normalizedEmail);
+
+      const adminSnapshot = await database.ref(`${ADMIN_ACCOUNTS_PATH}/${adminKey}`).get();
+      if (!adminSnapshot.exists()) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      const adminRecord = adminSnapshot.val();
+      if (!adminRecord?.passwordHash) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      const isPasswordValid = await bcrypt.compare(password, adminRecord.passwordHash);
+      if (!isPasswordValid) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      const session = buildAdminSession(adminRecord);
+
+      return res.status(200).json({
+        message: "Admin login successful",
+        session
+      });
+    } catch (error) {
+      console.error("Admin login error:", error.message);
+      return res.status(500).json({ message: "Admin login failed" });
+    }
+  }
+);
+
 // ============ USER PROFILE ENDPOINTS ============
 
 app.get("/api/user/profile", verifyToken, async (req, res) => {
@@ -569,6 +630,203 @@ app.get("/api/user/profile", verifyToken, async (req, res) => {
   } catch (error) {
     console.error("Profile fetch error:", error.message);
     return res.status(500).json({ message: "Failed to fetch profile" });
+  }
+});
+
+app.post(
+  "/api/user/test-attempts",
+  verifyToken,
+  [
+    body("testId").trim().isLength({ min: 1, max: 120 }),
+    body("testName").trim().isLength({ min: 1, max: 250 }),
+    body("score").isFloat({ min: 0, max: 100 }),
+    body("accuracy").isFloat({ min: 0, max: 100 }),
+    body("correct").isInt({ min: 0 }),
+    body("total").isInt({ min: 1 }),
+    body("attempted").isInt({ min: 0 }),
+    body("notAttempted").isInt({ min: 0 }),
+    body("reviewCount").isInt({ min: 0 }),
+    body("analysis").optional().isObject(),
+    body("answers").optional().isObject(),
+    body("markedForReview").optional().isObject()
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ message: "Invalid attempt payload" });
+      }
+
+      const { uid, email } = req.user;
+      const {
+        testId,
+        testName,
+        score,
+        accuracy,
+        correct,
+        total,
+        attempted,
+        notAttempted,
+        reviewCount,
+        analysis,
+        answers,
+        markedForReview
+      } = req.body;
+
+      const submittedAt = new Date().toISOString();
+      const attemptId = crypto.randomUUID();
+
+      const attemptRecord = {
+        attemptId,
+        uid,
+        email,
+        testId,
+        testName,
+        score: Number(score),
+        accuracy: Number(accuracy),
+        correct: Number(correct),
+        total: Number(total),
+        attempted: Number(attempted),
+        notAttempted: Number(notAttempted),
+        reviewCount: Number(reviewCount),
+        analysis: analysis && typeof analysis === "object" ? analysis : {
+          correct: Number(correct),
+          incorrect: Math.max(Number(total) - Number(correct), 0),
+          attempted: Number(attempted),
+          notAttempted: Number(notAttempted),
+          reviewCount: Number(reviewCount),
+          accuracy: Number(accuracy)
+        },
+        answers: answers && typeof answers === "object" ? answers : {},
+        markedForReview: markedForReview && typeof markedForReview === "object" ? markedForReview : {},
+        submittedAt,
+        createdAt: submittedAt
+      };
+
+      await database.ref(`${USER_TEST_ATTEMPTS_PATH}/${uid}/${attemptId}`).set(attemptRecord);
+
+      return res.status(201).json({
+        message: "Test attempt saved",
+        attemptId,
+        submittedAt
+      });
+    } catch (error) {
+      console.error("Save test attempt error:", error.message);
+      return res.status(500).json({ message: "Failed to save test attempt" });
+    }
+  }
+);
+
+app.get(
+  "/api/user/test-attempts/:attemptId",
+  verifyToken,
+  [param("attemptId").trim().isLength({ min: 1, max: 120 })],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ message: "Invalid attempt id" });
+      }
+
+      const { uid } = req.user;
+      const { attemptId } = req.params;
+
+      const attemptSnapshot = await database.ref(`${USER_TEST_ATTEMPTS_PATH}/${uid}/${attemptId}`).get();
+      if (!attemptSnapshot.exists()) {
+        return res.status(404).json({ message: "Attempt not found" });
+      }
+
+      return res.status(200).json({ attempt: attemptSnapshot.val() });
+    } catch (error) {
+      console.error("Load test attempt error:", error.message);
+      return res.status(500).json({ message: "Failed to load test attempt" });
+    }
+  }
+);
+
+app.get("/api/user/dashboard", verifyToken, async (req, res) => {
+  try {
+    const { uid } = req.user;
+
+    const [attemptsSnapshot, testsSnapshot] = await Promise.all([
+      database.ref(`${USER_TEST_ATTEMPTS_PATH}/${uid}`).get(),
+      database.ref(ADMIN_TESTS_PATH).get()
+    ]);
+
+    const attempts = normalizeList(attemptsSnapshot.val())
+      .filter((item) => item && item.submittedAt)
+      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+
+    const tests = normalizeList(testsSnapshot.val());
+    const totalAvailableTests = tests.length;
+    const quizzesAttempted = attempts.length;
+    const attemptPercentage = totalAvailableTests > 0
+      ? Math.round((quizzesAttempted / totalAvailableTests) * 100)
+      : 0;
+
+    const avgScore = attempts.length > 0
+      ? Math.round(attempts.reduce((sum, attempt) => sum + Number(attempt.score || 0), 0) / attempts.length)
+      : null;
+
+    const bestScore = attempts.length > 0
+      ? Math.max(...attempts.map((attempt) => Number(attempt.score || 0)))
+      : null;
+
+    const totalAttemptedQuestions = attempts.reduce((sum, attempt) => sum + Number(attempt.attempted || 0), 0);
+    const totalCorrectQuestions = attempts.reduce((sum, attempt) => sum + Number(attempt.correct || 0), 0);
+    const accuracy = totalAttemptedQuestions > 0
+      ? Math.round((totalCorrectQuestions / totalAttemptedQuestions) * 100)
+      : null;
+
+    const uniqueDateSet = new Set(
+      attempts
+        .map((attempt) => String(attempt.submittedAt || "").slice(0, 10))
+        .filter(Boolean)
+    );
+
+    let currentStreak = 0;
+    const cursor = new Date();
+    while (true) {
+      const day = cursor.toISOString().slice(0, 10);
+      if (!uniqueDateSet.has(day)) break;
+      currentStreak += 1;
+      cursor.setUTCDate(cursor.getUTCDate() - 1);
+    }
+
+    const recentQuizActivity = attempts.slice(0, 5).map((attempt) => ({
+      id: attempt.attemptId,
+      testId: attempt.testId,
+      title: attempt.testName,
+      score: `${Math.round(Number(attempt.score || 0))}%`,
+      accuracy: `${Math.round(Number(attempt.accuracy || 0))}%`,
+      attempted: Number(attempt.attempted || 0),
+      total: Number(attempt.total || 0),
+      submittedAt: attempt.submittedAt,
+      time: `${Math.max(Number(attempt.attempted || 0), 1)} questions`,
+      date: new Date(attempt.submittedAt).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+      })
+    }));
+
+    return res.status(200).json({
+      performanceSnapshot: {
+        avgScore,
+        bestScore,
+        accuracy
+      },
+      currentStreak,
+      quizAttempts: {
+        attempted: quizzesAttempted,
+        total: totalAvailableTests,
+        attemptPercentage
+      },
+      recentQuizActivity
+    });
+  } catch (error) {
+    console.error("User dashboard fetch error:", error.message);
+    return res.status(500).json({ message: "Failed to load dashboard" });
   }
 });
 
@@ -863,8 +1121,8 @@ app.put("/api/admin/tests", [
 
     // ⚠️ VALIDATE EACH TEST
     for (const test of tests) {
-      if (!test.id || !test.title) {
-        return res.status(400).json({ message: "Each test must have id and title" });
+      if (!test.id || (!test.title && !test.testName)) {
+        return res.status(400).json({ message: "Each test must have id and title/testName" });
       }
     }
 

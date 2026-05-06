@@ -72,10 +72,6 @@ export const refreshAccessToken = async (refreshToken) => {
   return { accessToken: body.accessToken };
 };
 
-// ⚠️ DEPRECATED: Admin credentials should NOT be hardcoded
-// Use a proper backend-based admin authentication system instead
-// For now, these are stubs to prevent import errors
-
 export const ADMIN_TEST_ACCOUNTS = [];
 
 const ADMIN_SESSION_KEY = "admin_session";
@@ -90,7 +86,13 @@ export const getAdminSession = () => {
 };
 
 export const loginAdminWithTestCredentials = async (email, password) => {
-  throw new Error("Admin login is disabled. Please use a proper admin authentication system.");
+  const result = await request("/api/admin/login", { email, password });
+  return result.session;
+};
+
+export const setAdminSession = (session) => {
+  localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session));
+  return session;
 };
 
 export const logoutAdmin = () => {

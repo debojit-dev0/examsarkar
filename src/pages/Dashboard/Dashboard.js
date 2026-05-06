@@ -12,6 +12,12 @@ const Dashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [dashboardStats, setDashboardStats] = useState(null);
   const [purchaseData, setPurchaseData] = useState({ loading: true, purchasedPlans: [], accessibleTests: [] });
+  const [userDashboard, setUserDashboard] = useState({
+    performanceSnapshot: { avgScore: null, bestScore: null, accuracy: null },
+    currentStreak: 0,
+    quizAttempts: { attempted: 0, total: 0, attemptPercentage: 0 },
+    recentQuizActivity: []
+  });
 
   const liveTestUsers = [
     { name: 'User1', avatar: '👨' },
@@ -55,8 +61,31 @@ const Dashboard = () => {
         }
 
 
-        // FETCH UNLOCKED TESTS FOR THE CURRENT USER
+        // FETCH USER DASHBOARD + UNLOCKED TESTS
         if (accessToken) {
+          const dashboardRes = await fetch(buildApiUrl('/api/user/dashboard'), {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (dashboardRes.status === 401) {
+            handleUnauthorized();
+            return;
+          }
+
+          if (dashboardRes.ok) {
+            const dashboardJson = await dashboardRes.json();
+            setUserDashboard({
+              performanceSnapshot: dashboardJson.performanceSnapshot || { avgScore: null, bestScore: null, accuracy: null },
+              currentStreak: Number(dashboardJson.currentStreak || 0),
+              quizAttempts: dashboardJson.quizAttempts || { attempted: 0, total: 0, attemptPercentage: 0 },
+              recentQuizActivity: Array.isArray(dashboardJson.recentQuizActivity) ? dashboardJson.recentQuizActivity : []
+            });
+          }
+
           const testsRes = await fetch(buildApiUrl('/api/user/tests'), {
             method: 'GET',
             headers: {
@@ -82,6 +111,12 @@ const Dashboard = () => {
           }
         } else {
           setPurchaseData({ loading: false, purchasedPlans: [], accessibleTests: [] });
+          setUserDashboard({
+            performanceSnapshot: { avgScore: null, bestScore: null, accuracy: null },
+            currentStreak: 0,
+            quizAttempts: { attempted: 0, total: 0, attemptPercentage: 0 },
+            recentQuizActivity: []
+          });
         }
       } catch (err) {
         console.error('Dashboard load error:', err);
@@ -92,15 +127,11 @@ const Dashboard = () => {
     loadData();
   }, []);
 
-  const streakDays = [
-    { day: 'Mon', completed: true },
-    { day: 'Tue', completed: true },
-    { day: 'Wed', completed: true },
-    { day: 'Thu', completed: true },
-    { day: 'Fri', completed: true },
-    { day: 'Sat', completed: true },
-    { day: 'Sun', completed: false },
-  ];
+  const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const streakDays = weekDays.map((day, idx) => ({
+    day,
+    completed: idx < Math.min(userDashboard.currentStreak, weekDays.length)
+  }));
 
   const seriesTheme = {
     gs: { bgColor: '#E8F0FE', icon: '📋', color: '#5B6BFF', label: 'GS / GE' },
@@ -114,6 +145,24 @@ const Dashboard = () => {
     : [];
 
   const unlockedTests = purchaseData.purchasedPlans.length > 0 ? purchaseData.accessibleTests.slice(0, 6) : [];
+  const recentActivity = userDashboard.recentQuizActivity;
+  const perfTiles = [
+    {
+      id: 1,
+      label: 'Avg. Score',
+      value: userDashboard.performanceSnapshot.avgScore !== null ? `${userDashboard.performanceSnapshot.avgScore}%` : '--'
+    },
+    {
+      id: 2,
+      label: 'Best Score',
+      value: userDashboard.performanceSnapshot.bestScore !== null ? `${userDashboard.performanceSnapshot.bestScore}%` : '--'
+    },
+    {
+      id: 3,
+      label: 'Accuracy',
+      value: userDashboard.performanceSnapshot.accuracy !== null ? `${userDashboard.performanceSnapshot.accuracy}%` : '--'
+    }
+  ];
    
 
   return (
@@ -160,7 +209,7 @@ const Dashboard = () => {
               <div className="stat-icon streak-icon">🔥</div>
               <div className="stat-content">
                 <p className="stat-label">Current Streak</p>
-                <p className="stat-value">{dashboardStats?.currentStreak ?? 0} days</p>
+                <p className="stat-value">{userDashboard.currentStreak} days</p>
                 <p className="stat-change">Keep it up! 🔥</p>
               </div>
             </div>
@@ -169,14 +218,14 @@ const Dashboard = () => {
               <div className="stat-icon quiz-icon">📋</div>
               <div className="stat-content">
                 <p className="stat-label">Quiz Attempts</p>
-                <p className="stat-value">{dashboardStats?.quizzesAttempted ?? 0}/{dashboardStats?.quizzesTotal ?? 0}</p>
+                <p className="stat-value">{userDashboard.quizAttempts.attempted ?? 0}/{userDashboard.quizAttempts.total ?? 0}</p>
                 <div className="progress-bar">
                   <div 
                     className="progress-fill" 
-                    style={{ width: `${dashboardStats?.attemptPercentage ?? 0}%` }}
+                    style={{ width: `${userDashboard.quizAttempts.attemptPercentage ?? 0}%` }}
                   ></div>
                 </div>
-                <p className="progress-text">{dashboardStats?.attemptPercentage ?? 0}%</p>
+                <p className="progress-text">{userDashboard.quizAttempts.attemptPercentage ?? 0}%</p>
               </div>
             </div>
           </div>
@@ -355,7 +404,7 @@ const Dashboard = () => {
             </div>
 
             <div className="recent-list">
-              {recentActivity.map((item) => (
+              {recentActivity.length > 0 ? recentActivity.map((item) => (
                 <div className="recent-item" key={item.id}>
                   <div className="recent-left">
                     <div className="recent-icon">📘</div>
@@ -366,10 +415,29 @@ const Dashboard = () => {
                   </div>
                   <div className="recent-right">
                     <div className="recent-score">{item.score}</div>
-                    <button className="review-btn">Review</button>
+                    <button
+                      className="review-btn"
+                      onClick={() => {
+                        if (item.testId && item.id) {
+                          navigate(`/test/${item.testId}?attemptId=${item.id}`);
+                        }
+                      }}
+                    >
+                      Review
+                    </button>
                   </div>
                 </div>
-              ))}
+              )) : (
+                <div className="recent-item">
+                  <div className="recent-left">
+                    <div className="recent-icon">📝</div>
+                    <div>
+                      <p className="recent-title">No quiz attempts yet</p>
+                      <p className="recent-meta">Attempt a test to see your activity here.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -380,7 +448,7 @@ const Dashboard = () => {
                 <span className="fire-icon">🔥</span>
                 <h3 className="card-title">Streak Calendar</h3>
               </div>
-              <span className="streak-days-count">7 days</span>
+              <span className="streak-days-count">{userDashboard.currentStreak} days</span>
             </div>
 
             <div className="streak-days-container">
@@ -403,17 +471,5 @@ const Dashboard = () => {
     </>
   );
 };
-
-  const recentActivity = [
-    { id: 1, title: 'Polity Quiz - Fundamental Rights', score: '80%', time: '12 min', date: '24 May 2024' },
-    { id: 2, title: 'History Quiz - Medieval India', score: '60%', time: '15 min', date: '22 May 2024' },
-    { id: 3, title: 'Geography Quiz - World Mapping', score: '70%', time: '10 min', date: '20 May 2024' }
-  ];
-
-  const perfTiles = [
-    { id: 1, label: 'Avg. Score', value: '--' },
-    { id: 2, label: 'Best Score', value: '--' },
-    { id: 3, label: 'Accuracy', value: '--' }
-  ];
 
 export default Dashboard;
