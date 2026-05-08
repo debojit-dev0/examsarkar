@@ -392,6 +392,16 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
   }
 
   if (submitted && !reviewMode) {
+    // Remove attemptId from URL
+    if (attemptId && window.history.replaceState) {
+      window.history.replaceState({}, document.title, `/test/${testId}`);
+    }
+
+    // compute marks
+    const marksPerQuestion = Number(test?.config?.marksPerQuestion || 10);
+    const totalMarks = (test?.parsedQuestions?.length || 0) * marksPerQuestion;
+    const obtainedMarks = (Number(results?.correct || 0) * marksPerQuestion) || 0;
+
     return (
       <>
         <Navbar
@@ -418,7 +428,8 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
                 </div>
                 <div className="score-info">
                   <h2>{results.score >= 60 ? "Great Job! 🎉" : "Good Effort! 💪"}</h2>
-                  <p>You scored {results.correct} out of {results.total} questions correctly</p>
+                  <p className="score-subtext">You scored {results.correct} out of {results.total} questions correctly</p>
+                  <p className="marks-text">Marks: {obtainedMarks} / {totalMarks}</p>
                 </div>
               </div>
 

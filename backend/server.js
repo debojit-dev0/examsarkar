@@ -293,6 +293,31 @@ const testMatchesPurchase = (test, purchase) => {
   return allowedSubjects.includes(testSubject);
 };
 
+// ============ MIDDLEWARE: VERIFY ADMIN TOKEN ============
+const verifyAdminToken = async (req, res, next) => {
+  try {
+    const session = req.headers['x-admin-session'];
+    if (!session) {
+      return res.status(401).json({ message: "Unauthorized: Admin session required" });
+    }
+
+    try {
+      const decoded = JSON.parse(Buffer.from(session, 'base64').toString('utf-8'));
+      if (!decoded.uid || !decoded.role || (decoded.role !== 'super-admin' && decoded.role !== 'content-admin')) {
+        return res.status(401).json({ message: "Unauthorized: Invalid admin session" });
+      }
+
+      req.admin = decoded;
+      next();
+    } catch (parseError) {
+      return res.status(401).json({ message: "Unauthorized: Invalid session format" });
+    }
+  } catch (error) {
+    console.error("Admin verification error:", error.message);
+    return res.status(401).json({ message: "Unauthorized: Admin verification failed" });
+  }
+};
+
 // ============ PUBLIC ENDPOINTS ============
 app.get("/api/health", (req, res) => {
   res.status(200).json({
@@ -942,36 +967,49 @@ app.post(
         return res.status(400).json({ message: "Payment verification failed" });
       }
 
-      // ⚠️ MARK PAYMENT AS PAID
+      // ⚠️ FETCH PAYMENT RECORD AND VALIDATE
       const paymentRef = database.ref(`payments/${razorpay_order_id}`);
+      const p = await paymentRef.get();
+      
+      if (!p.exists()) {
+        console.warn(`Payment record not found for order ${razorpay_order_id}`);
+        return res.status(404).json({ message: "Payment order not found" });
+      }
+
+      const paymentRecord = p.val();
+      const uid = paymentRecord?.uid;
+      const planKey = paymentRecord?.planKey;
+      const planName = paymentRecord?.planName;
+
+      // ⚠️ VALIDATE REQUIRED FIELDS
+      if (!uid || !planKey) {
+        console.error(`Invalid payment record: uid=${uid}, planKey=${planKey}`);
+        return res.status(400).json({ message: "Invalid payment record" });
+      }
+
       const paidAt = new Date().toISOString();
+
+      // ⚠️ MARK PAYMENT AS PAID
       await paymentRef.update({ status: "paid", paymentId: razorpay_payment_id, paidAt });
 
-      const p = await paymentRef.get();
-      const uid = p.val()?.uid;
-      const planKey = p.val()?.planKey || null;
-      const planName = p.val()?.planName || null;
+      // ⚠️ UPDATE USER PAYMENT STATUS
+      await database.ref(`userPayments/${uid}/${razorpay_order_id}`).update({
+        status: "paid",
+        paymentId: razorpay_payment_id,
+        paidAt,
+        planKey,
+        planName
+      });
 
-      if (uid) {
-        await database.ref(`userPayments/${uid}/${razorpay_order_id}`).update({
-          status: "paid",
-          paymentId: razorpay_payment_id,
-          paidAt,
-          planKey,
-          planName
-        });
-
-        if (planKey) {
-          await database.ref(`${USER_PURCHASES_PATH}/${uid}/${razorpay_order_id}`).set({
-            orderId: razorpay_order_id,
-            paymentId: razorpay_payment_id,
-            paidAt,
-            planKey,
-            planName,
-            status: "paid"
-          });
-        }
-      }
+      // ⚠️ CREATE PURCHASE RECORD
+      await database.ref(`${USER_PURCHASES_PATH}/${uid}/${razorpay_order_id}`).set({
+        orderId: razorpay_order_id,
+        paymentId: razorpay_payment_id,
+        paidAt,
+        planKey,
+        planName,
+        status: "paid"
+      });
 
       return res.status(200).json({ success: true, message: "Payment verified" });
     } catch (error) {
@@ -1098,7 +1136,7 @@ app.get("/api/user/tests", verifyToken, async (req, res) => {
   }
 });
 
-app.get("/api/admin/tests", async (req, res) => {
+app.get("/api/admin/tests", verifyAdminToken, async (req, res) => {
   try {
     const snapshot = await database.ref(ADMIN_TESTS_PATH).get();
     return res.status(200).json({ tests: normalizeList(snapshot.val()) });
@@ -1108,7 +1146,7 @@ app.get("/api/admin/tests", async (req, res) => {
   }
 });
 
-app.put("/api/admin/tests", [
+app.put("/api/admin/tests", verifyAdminToken, [
   body("tests").isArray().notEmpty()
 ], async (req, res) => {
   try {

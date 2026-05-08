@@ -4,9 +4,9 @@ import { preloadRazorpayCheckout, startPaymentCheckout } from "../Payment/Paymen
 
 export default function SubPlanCard({ title, price, features, type }) {
   const handlePayment = () => {
-    const isLoggedIn = Boolean(localStorage.getItem('token') || localStorage.getItem('user'));
+    const isLoggedIn = Boolean(localStorage.getItem('accessToken') || localStorage.getItem('refreshToken'));
     const planPeriod = type || 'daily';
-    const planSubject = title.toLowerCase();
+    const planSubject = title.toLowerCase() === 'ge' ? 'gs' : title.toLowerCase();
     const planKey = `${planPeriod}:${planSubject}`;
     const planName = `${planPeriod.charAt(0).toUpperCase() + planPeriod.slice(1)} ${title}`;
 

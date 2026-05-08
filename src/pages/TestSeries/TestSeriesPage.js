@@ -17,7 +17,7 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
   const [selectedTestId, setSelectedTestId] = useState(null); // Track which test triggered auth
 
   const isLoggedIn = () => {
-    return Boolean(localStorage.getItem("token") || localStorage.getItem("user"));
+    return Boolean(localStorage.getItem("accessToken") || localStorage.getItem("refreshToken"));
   };
 
   const handleAttemptQuiz = (testId) => {

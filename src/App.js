@@ -49,7 +49,7 @@ function AppContent() {
   }, [navigate]);
 
   const handleLoginClick = () => {
-    const hasSession = Boolean(localStorage.getItem("token") || localStorage.getItem("user"));
+    const hasSession = Boolean(localStorage.getItem("accessToken") || localStorage.getItem("refreshToken"));
     if (hasSession) {
       // if already logged in, navigate to dashboard
       navigate("/dashboard");
@@ -60,7 +60,7 @@ function AppContent() {
   };
 
   const handleStartFreeTest = () => {
-    const hasSession = Boolean(localStorage.getItem("token") || localStorage.getItem("user"));
+    const hasSession = Boolean(localStorage.getItem("accessToken") || localStorage.getItem("refreshToken"));
     if (hasSession) {
       // if logged in, go to test series
       navigate("/test-series");
