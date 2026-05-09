@@ -144,7 +144,25 @@ const Dashboard = () => {
     ? purchaseData.purchasedPlans
     : [];
 
-  const unlockedTests = purchaseData.purchasedPlans.length > 0 ? purchaseData.accessibleTests.slice(0, 6) : [];
+  // Filter out old daily quizzes - only keep today's daily quiz if available
+  const getFilteredTests = (tests) => {
+    if (!Array.isArray(tests)) return [];
+    
+    const today = new Date().toISOString().split("T")[0];
+    const filteredTests = tests.filter((test) => {
+      // If it's a daily quiz, only show if it's for today
+      if (test.type === "daily-quiz") {
+        const testDate = test.date ? test.date.split("T")[0] : null;
+        return testDate === today;
+      }
+      // Keep all non-daily-quiz tests
+      return true;
+    });
+    
+    return filteredTests;
+  };
+
+  const unlockedTests = purchaseData.purchasedPlans.length > 0 ? getFilteredTests(purchaseData.accessibleTests).slice(0, 6) : [];
   const recentActivity = userDashboard.recentQuizActivity;
   const perfTiles = [
     {

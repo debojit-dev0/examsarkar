@@ -416,17 +416,28 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
     setEditQuestionDraft(null);
   };
 
-  const deleteTest = (testId) => {
+  const deleteTest = async (testId) => {
     const testToDelete = tests.find((test) => test.id === testId);
     if (!testToDelete) return;
 
     const confirmed = window.confirm(`Delete "${testToDelete.testName}"? This action cannot be undone.`);
     if (!confirmed) return;
 
-    setTests((prevTests) => prevTests.filter((test) => test.id !== testId));
+    const updatedTests = tests.filter((test) => test.id !== testId);
+    setTests(updatedTests);
 
     if (reviewedTestId === testId) {
       closeTestReview();
+    }
+
+    // Persist deletion to backend
+    try {
+      await saveAdminTests(updatedTests);
+    } catch (error) {
+      console.error("Failed to delete test:", error);
+      alert("Failed to delete test. Please try again.");
+      // Revert the state
+      setTests(tests);
     }
   };
 

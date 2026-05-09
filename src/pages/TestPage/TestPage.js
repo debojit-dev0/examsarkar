@@ -324,6 +324,16 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
     return parts.length > 1 ? parts : [withoutQPrefix];
   };
 
+  // Get feedback message based on score
+  const getFeedbackMessage = (score) => {
+    if (score >= 90) return "Outstanding! 🌟";
+    if (score >= 80) return "Excellent! 🏆";
+    if (score >= 70) return "Great Job! 🎉";
+    if (score >= 60) return "Good Job! 👍";
+    if (score >= 40) return "Good Effort! 💪";
+    return "Keep Practicing! 📚";
+  };
+
   // Calculate statistics
   const calculateStats = () => {
     let attempted = 0;
@@ -427,7 +437,7 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
                   </div>
                 </div>
                 <div className="score-info">
-                  <h2>{results.score >= 60 ? "Great Job! 🎉" : "Good Effort! 💪"}</h2>
+                  <h2>{getFeedbackMessage(results.score)}</h2>
                   <p className="score-subtext">You scored {results.correct} out of {results.total} questions correctly</p>
                   <p className="marks-text">Marks: {obtainedMarks} / {totalMarks}</p>
                 </div>

@@ -236,9 +236,21 @@ app.get("/api/user/tests", verifyToken, async (req, res) => {
     const purchases = normalizeList(purchasesSnapshot.val()).filter((purchase) => purchase.status === "paid");
     const purchasedPlans = purchases.map(getPurchasePlan).filter((purchase) => purchase.planKey);
 
+    // Get today's date in YYYY-MM-DD format for filtering daily quizzes
+    const today = new Date().toISOString().split("T")[0];
+
     const accessibleTests = tests.filter((test) => {
-      if (test.access === "free") return true;
-      return purchasedPlans.some((purchase) => testMatchesPurchase(test, purchase));
+      // Check if test is accessible (free or purchased)
+      const isAccessible = test.access === "free" || purchasedPlans.some((purchase) => testMatchesPurchase(test, purchase));
+      if (!isAccessible) return false;
+
+      // If it's a daily-quiz, only include if it's for today
+      if (test.type === "daily-quiz") {
+        const testDate = test.date ? test.date.split("T")[0] : null;
+        return testDate === today;
+      }
+
+      return true;
     });
 
     const planSummaries = purchasedPlans.map((purchase) => {
