@@ -14,14 +14,18 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
   const [authMode, setAuthMode] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(null); // Store which plan user selected
   const [freeTests, setFreeTests] = useState([]);
+  const [freeTestsLoading, setFreeTestsLoading] = useState(true);
   const [selectedTestId, setSelectedTestId] = useState(null); // Track which test triggered auth
 
   const isLoggedIn = () => {
     return Boolean(localStorage.getItem("accessToken") || localStorage.getItem("refreshToken"));
   };
 
-  const handleAttemptQuiz = (testId) => {
-    if (!isLoggedIn()) {
+  const handleAttemptQuiz = (test) => {
+    const testId = test?.id;
+    if (!testId) return;
+
+    if (!isLoggedIn() && test?.access !== "free") {
       // Store the test ID and show login modal
       setSelectedTestId(testId);
       setAuthMode("login");
@@ -107,16 +111,22 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
 
     const fetchFreeTests = async () => {
       try {
+        setFreeTestsLoading(true);
         const tests = await loadAdminTests();
         console.log("[TestSeries] All tests loaded:", tests);
         
         if (!isActive) return;
 
+        const today = new Date().toISOString().split("T")[0];
         const filtered = (Array.isArray(tests) ? tests : [])
           .filter((test) => {
             const isFree = test?.access === "free";
-            console.log(`[TestSeries] Test "${test?.testName}": access=${test?.access}, isFree=${isFree}`);
-            return isFree;
+            if (!isFree) return false;
+            if (test?.type === "daily-quiz") {
+              const testDate = String(test?.date || "").split("T")[0];
+              return testDate === today;
+            }
+            return true;
           })
           .sort((left, right) => {
             const leftTime = new Date(left?.createdAt || 0).getTime();
@@ -130,6 +140,10 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
         console.error("[TestSeries] Failed to load free tests:", error);
         if (isActive) {
           setFreeTests([]);
+        }
+      } finally {
+        if (isActive) {
+          setFreeTestsLoading(false);
         }
       }
     };
@@ -148,6 +162,17 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
     if (normalized === "csat") return "CSAT";
     if (normalized === "combo") return "COMBO";
     return normalized.toUpperCase();
+  };
+
+  const formatDate = (value) => {
+    if (!value) return "Always available";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric"
+    });
   };
 
   return (
@@ -209,13 +234,25 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
             <div className="free-tests-header">
               <h2>Free Tests Uploaded by Admin</h2>
               <p>
-                {freeTests.length > 0
-                  ? "These free tests are available now."
-                  : "No free tests uploaded yet."}
+                {freeTestsLoading
+                  ? "Loading free tests..."
+                  : freeTests.length > 0
+                    ? "These free tests are available now."
+                    : "No free tests uploaded yet."}
               </p>
             </div>
 
-            {freeTests.length > 0 ? (
+            {freeTestsLoading ? (
+              <div className="free-tests-grid">
+                <article className="free-test-card">
+                  <div className="free-test-topline">
+                    <span className="free-badge">LOADING</span>
+                  </div>
+                  <h3>Loading free tests...</h3>
+                  <p>Please wait while we fetch today's quizzes.</p>
+                </article>
+              </div>
+            ) : freeTests.length > 0 ? (
               <div className="free-tests-grid">
                 {freeTests.map((test) => (
                   <article key={test.id} className="free-test-card">
@@ -227,11 +264,11 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
                     <p>{formatSubject(test.subject)}</p>
                     <div className="free-test-meta">
                       <span>{test.questionCount || 0} questions</span>
-                      <span>{test.date ? `Date: ${test.date}` : "Always available"}</span>
+                      <span>{`Date: ${formatDate(test.date)}`}</span>
                     </div>
                     <button 
                       className="attempt-quiz-btn"
-                      onClick={() => handleAttemptQuiz(test.id)}
+                      onClick={() => handleAttemptQuiz(test)}
                     >
                       Attempt Quiz →
                     </button>

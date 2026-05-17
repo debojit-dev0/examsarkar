@@ -466,6 +466,16 @@
     font-size: 20px;
   }
   
+  .card-action {
+    background: none;
+    border: none;
+    color: #6366f1;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0;
+  }
+  
   .performance-chart {
     margin-bottom: 16px;
     text-align: center;
@@ -499,6 +509,10 @@
     transition: all 0.3s ease;
   }
   
+  .card-action:hover {
+    text-decoration: underline;
+  }
+
   .test-now-button:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);

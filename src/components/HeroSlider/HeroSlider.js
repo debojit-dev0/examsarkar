@@ -9,7 +9,7 @@ const images = [
   "https://images.unsplash.com/photo-1522202176988-66273c2fd55f"
 ];
 
-export default function HeroSlider({ onStartFreeTest, onLoginClick }) {
+export default function HeroSlider({ onStartFreeTest, onLoginClick, onDashboardClick, isLoggedIn, stats }) {
   const [index, setIndex] = useState(0);
   const currentImage = images[index];
   const nextImage = useMemo(() => images[(index + 1) % images.length], [index]);
@@ -26,6 +26,9 @@ export default function HeroSlider({ onStartFreeTest, onLoginClick }) {
     const prefetch = new Image();
     prefetch.src = nextImage;
   }, [nextImage]);
+
+  const liveNow = Number.isFinite(Number(stats?.liveNow)) ? Number(stats?.liveNow) : null;
+  const weeklyIncrease = Number.isFinite(Number(stats?.weeklyIncrease)) ? Number(stats?.weeklyIncrease) : null;
 
   return (
     <section className="heroSlider">
@@ -67,9 +70,15 @@ export default function HeroSlider({ onStartFreeTest, onLoginClick }) {
             Start Free Test
           </button>
 
-          <button className="secondary" onClick={onLoginClick}>
-            Login
-          </button>
+          {isLoggedIn ? (
+            <button className="secondary" onClick={onDashboardClick}>
+              Go to Dashboard
+            </button>
+          ) : (
+            <button className="secondary" onClick={onLoginClick}>
+              Login
+            </button>
+          )}
         </div>
 
         {/* HERO TAGS */}
@@ -79,7 +88,7 @@ export default function HeroSlider({ onStartFreeTest, onLoginClick }) {
           <div className="tag-item live">
             <span className="live-dot"></span>
             {/* <FaFire className="tag-icon live-icon" /> */}
-            <span>1,284 Students are Live Now</span>
+            <span>{liveNow !== null ? liveNow.toLocaleString() : "--"} Students are Live Now</span>
           </div>
 
           <div className="divider">•</div>
@@ -88,7 +97,7 @@ export default function HeroSlider({ onStartFreeTest, onLoginClick }) {
           <div className="tag-item registered">
             <span className="registered-dot"></span>
             {/* <FaChartBar className="tag-icon green"></FaChartBar> */}
-            <span>10,532 Registered This Week</span>
+            <span>{weeklyIncrease !== null ? weeklyIncrease.toLocaleString() : "--"} Registered This Week</span>
           </div>
 
           <div className="divider">•</div>

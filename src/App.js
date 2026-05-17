@@ -4,6 +4,7 @@ import { Routes, Route, useNavigate } from "react-router-dom";
 import Navbar from "./components/Navbar/Navbar";
 import HeroSlider from "./components/HeroSlider/HeroSlider";
 import "./App.css";
+import { buildApiUrl } from "./utils/apiBaseUrl";
 
 const Tiles = lazy(() => import("./components/Tiles/Tiles"));
 const WhyUs = lazy(() => import("./components/WhyUs/WhyUs"));
@@ -27,6 +28,7 @@ const sectionFallback = <div style={{ minHeight: 120 }} />;
 // 🔥 NEW WRAPPER COMPONENT (handles navigation)
 function AppContent() {
   const [authMode, setAuthMode] = useState(null);
+  const [homeStats, setHomeStats] = useState(null);
   const navigate = useNavigate();
 
   // listen for global events to open auth modals (used by PaymentModal)
@@ -48,6 +50,29 @@ function AppContent() {
     return () => window.removeEventListener('paymentSuccess', handler);
   }, [navigate]);
 
+  useEffect(() => {
+    let isActive = true;
+
+    const loadStats = async () => {
+      try {
+        const response = await fetch(buildApiUrl("/api/stats"));
+        if (!response.ok) return;
+        const data = await response.json();
+        if (isActive) {
+          setHomeStats(data.stats || null);
+        }
+      } catch (error) {
+        console.error("Failed to load home stats:", error);
+      }
+    };
+
+    loadStats();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
   const handleLoginClick = () => {
     const hasSession = Boolean(localStorage.getItem("accessToken") || localStorage.getItem("refreshToken"));
     if (hasSession) {
@@ -60,15 +85,7 @@ function AppContent() {
   };
 
   const handleStartFreeTest = () => {
-    const hasSession = Boolean(localStorage.getItem("accessToken") || localStorage.getItem("refreshToken"));
-    if (hasSession) {
-      // if logged in, go to test series
-      navigate("/test-series");
-      return;
-    }
-
-    // if not logged in, show login modal
-    setAuthMode("login");
+    navigate("/test-series");
   };
 
   // refs for smooth scroll
@@ -100,6 +117,9 @@ function AppContent() {
               <HeroSlider
                 onStartFreeTest={handleStartFreeTest}
                 onLoginClick={handleLoginClick}
+                onDashboardClick={() => navigate("/dashboard")}
+                isLoggedIn={Boolean(localStorage.getItem("accessToken") || localStorage.getItem("refreshToken"))}
+                stats={homeStats}
               />
             </div>
 
@@ -121,6 +141,7 @@ function AppContent() {
               <CTA
                 onStartFreeTest={handleStartFreeTest}
                 onExploreTestSeries={() => navigate("/test-series")}
+                stats={homeStats}
               />
             </Suspense>
 

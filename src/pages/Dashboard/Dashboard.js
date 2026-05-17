@@ -19,6 +19,8 @@ const Dashboard = () => {
     recentQuizActivity: []
   });
 
+  const [showAllActivity, setShowAllActivity] = useState(false);
+
   const liveTestUsers = [
     { name: 'User1', avatar: '👨' },
     { name: 'User2', avatar: '👨' },
@@ -163,7 +165,11 @@ const Dashboard = () => {
   };
 
   const unlockedTests = purchaseData.purchasedPlans.length > 0 ? getFilteredTests(purchaseData.accessibleTests).slice(0, 6) : [];
-  const recentActivity = userDashboard.recentQuizActivity;
+  const recentActivity = Array.isArray(userDashboard.recentQuizActivity)
+    ? userDashboard.recentQuizActivity
+    : [];
+  const displayedActivity = showAllActivity ? recentActivity : recentActivity.slice(0, 5);
+  const primaryTest = getFilteredTests(purchaseData.accessibleTests)[0] || null;
   const perfTiles = [
     {
       id: 1,
@@ -182,6 +188,24 @@ const Dashboard = () => {
     }
   ];
    
+
+  const handleNavigateToTest = () => {
+    if (primaryTest?.id) {
+      navigate(`/test/${primaryTest.id}`, { state: { testId: primaryTest.id } });
+      return;
+    }
+    navigate('/test-series');
+  };
+
+  const streakMessage = userDashboard.currentStreak >= 3
+    ? "You're on fire! Keep going!"
+    : userDashboard.currentStreak > 0
+      ? "Good start. Build your streak!"
+      : "Start your streak with today's quiz.";
+
+  const streakLabel = userDashboard.currentStreak > 0
+    ? "Keep it up!"
+    : "Start a streak today.";
 
   return (
     <>
@@ -228,7 +252,7 @@ const Dashboard = () => {
               <div className="stat-content">
                 <p className="stat-label">Current Streak</p>
                 <p className="stat-value">{userDashboard.currentStreak} days</p>
-                <p className="stat-change">Keep it up! 🔥</p>
+                <p className="stat-change">{streakLabel}</p>
               </div>
             </div>
 
@@ -351,7 +375,7 @@ const Dashboard = () => {
                 <p className="challenge-subtitle">Attempt today's quiz and build your streak.</p>
               </div>
             </div>
-            <button className="challenge-button">
+            <button className="challenge-button" onClick={handleNavigateToTest}>
               Attempt Now <ChevronRight size={20} />
             </button>
           </div>
@@ -386,7 +410,7 @@ const Dashboard = () => {
             </div>
 
             <p className="performance-text">Attempt tests to see your performance insights.</p>
-            <button className="test-now-button">Take a Test Now</button>
+            <button className="test-now-button" onClick={handleNavigateToTest}>Take a Test Now</button>
           </div>
 
           {/* Live Test Now */}
@@ -409,7 +433,7 @@ const Dashboard = () => {
               <span className="more-users">+343</span>
             </div>
 
-            <button className="join-test-button">
+            <button className="join-test-button" onClick={handleNavigateToTest}>
               Join Live Test <ChevronRight size={18} />
             </button>
           </div>
@@ -418,11 +442,17 @@ const Dashboard = () => {
           <div className="recent-activity-card">
             <div className="card-header">
               <h3 className="card-title">Recent Quiz Activity</h3>
-              <div className="card-action">View All</div>
+              <button
+                type="button"
+                className="card-action"
+                onClick={() => setShowAllActivity((prev) => !prev)}
+              >
+                {showAllActivity ? "View Less" : "View All"}
+              </button>
             </div>
 
             <div className="recent-list">
-              {recentActivity.length > 0 ? recentActivity.map((item) => (
+              {displayedActivity.length > 0 ? displayedActivity.map((item) => (
                 <div className="recent-item" key={item.id}>
                   <div className="recent-left">
                     <div className="recent-icon">📘</div>
@@ -481,7 +511,7 @@ const Dashboard = () => {
               ))}
             </div>
 
-            <p className="streak-message">You're on fire! 🔥 Keep going!</p>
+            <p className="streak-message">{streakMessage}</p>
           </div>
         </div>
       </div>

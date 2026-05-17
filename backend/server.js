@@ -818,7 +818,7 @@ app.get("/api/user/dashboard", verifyToken, async (req, res) => {
       cursor.setUTCDate(cursor.getUTCDate() - 1);
     }
 
-    const recentQuizActivity = attempts.slice(0, 5).map((attempt) => ({
+    const recentQuizActivity = attempts.slice(0, 20).map((attempt) => ({
       id: attempt.attemptId,
       testId: attempt.testId,
       title: attempt.testName,
@@ -1100,6 +1100,17 @@ app.post('/api/payment/webhook', (req, res) => {
 
 // ============ TEST ENDPOINTS ============
 
+app.get("/api/tests", async (req, res) => {
+  try {
+    const snapshot = await database.ref(ADMIN_TESTS_PATH).get();
+    const tests = normalizeList(snapshot.val()).filter((test) => test?.access === "free");
+    return res.status(200).json({ tests });
+  } catch (error) {
+    console.error("Public tests fetch error:", error.message);
+    return res.status(500).json({ message: "Failed to load tests" });
+  }
+});
+
 app.get("/api/user/tests", verifyToken, async (req, res) => {
   try {
     const uid = req.user.uid;
@@ -1169,6 +1180,65 @@ app.put("/api/admin/tests", verifyAdminToken, [
   } catch (error) {
     console.error("Save admin tests error:", error.message);
     return res.status(500).json({ message: "Failed to save tests" });
+  }
+});
+
+app.get("/api/admin/users", verifyAdminToken, async (req, res) => {
+  try {
+    const [usersSnapshot, purchasesSnapshot, attemptsSnapshot] = await Promise.all([
+      database.ref("users").get(),
+      database.ref(USER_PURCHASES_PATH).get(),
+      database.ref(USER_TEST_ATTEMPTS_PATH).get()
+    ]);
+
+    const usersData = usersSnapshot.val() || {};
+    const purchasesData = purchasesSnapshot.val() || {};
+    const attemptsData = attemptsSnapshot.val() || {};
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - 7);
+    weekStart.setHours(0, 0, 0, 0);
+
+    const users = Object.entries(usersData).map(([uid, user]) => {
+      const userPurchases = normalizeList(purchasesData[uid] || {})
+        .filter((purchase) => purchase.status === "paid")
+        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+      const latestPurchase = userPurchases[0];
+      const purchasePlan = latestPurchase ? getPurchasePlan(latestPurchase) : null;
+
+      const attempts = normalizeList(attemptsData[uid] || {});
+      const latestAttempt = attempts.reduce((latest, attempt) => {
+        const submittedAt = new Date(attempt?.submittedAt || 0).getTime();
+        if (!Number.isFinite(submittedAt)) return latest;
+        return submittedAt > latest ? submittedAt : latest;
+      }, 0);
+
+      let activeWindow = "inactive";
+      if (latestAttempt) {
+        const latestDate = new Date(latestAttempt);
+        if (latestDate >= todayStart) {
+          activeWindow = "today";
+        } else if (latestDate >= weekStart) {
+          activeWindow = "week";
+        }
+      }
+
+      const fullName = `${user.firstName || ""} ${user.lastName || ""}`.trim();
+      return {
+        id: uid,
+        name: fullName || user.email || "User",
+        plan: purchasePlan?.planKey || "free",
+        activeWindow
+      };
+    });
+
+    return res.status(200).json({ users });
+  } catch (error) {
+    console.error("Admin users fetch error:", error.message);
+    return res.status(500).json({ message: "Failed to load users" });
   }
 });
 

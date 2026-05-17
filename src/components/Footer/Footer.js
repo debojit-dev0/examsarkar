@@ -1,7 +1,10 @@
 import "./Footer.css";
+import { useNavigate } from "react-router-dom";
 import { FaFacebookF, FaInstagram, FaTwitter, FaLinkedin, FaArrowRight } from "react-icons/fa";
 
 export default function Footer() {
+  const navigate = useNavigate();
+
   return (
     <footer className="footer-section">
 
@@ -27,10 +30,26 @@ export default function Footer() {
         <div className="footer-links">
           <h3>Quick Links</h3>
           <ul>
-            <li><FaArrowRight /> Home</li>
-            <li><FaArrowRight /> Tests</li>
-            <li><FaArrowRight /> Dashboard</li>
-            <li><FaArrowRight /> Results</li>
+            <li>
+              <button type="button" onClick={() => navigate("/")}> 
+                <FaArrowRight /> Home
+              </button>
+            </li>
+            <li>
+              <button type="button" onClick={() => navigate("/test-series")}> 
+                <FaArrowRight /> Tests
+              </button>
+            </li>
+            <li>
+              <button type="button" onClick={() => navigate("/dashboard")}> 
+                <FaArrowRight /> Dashboard
+              </button>
+            </li>
+            <li>
+              <button type="button" onClick={() => navigate("/dashboard")}> 
+                <FaArrowRight /> Results
+              </button>
+            </li>
           </ul>
         </div>
 

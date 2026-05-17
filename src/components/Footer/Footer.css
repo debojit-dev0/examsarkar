@@ -77,6 +77,18 @@
     cursor: pointer;
     transition: 0.3s ease;
   }
+
+  .footer-links li button {
+    background: transparent;
+    border: none;
+    color: inherit;
+    font: inherit;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    cursor: pointer;
+  }
   
   .footer-links li:hover {
     color: #f9fafb;

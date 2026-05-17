@@ -18,7 +18,8 @@ import {
   FiUsers
 } from "react-icons/fi";
 import JSZip from "jszip";
-import { loadAdminTests, saveAdminTests } from "../../utils/adminTestsStore";
+import { buildApiUrl } from "../../utils/apiBaseUrl";
+import { getAdminSessionHeader, loadAdminTests, saveAdminTests } from "../../utils/adminTestsStore";
 import "./AdminPanelPage.css";
 
 const ROLE_SUPER_ADMIN = "super-admin";
@@ -266,13 +267,8 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
   const [tests, setTests] = useState([]);
   const [testsLoaded, setTestsLoaded] = useState(false);
 
-  const [users] = useState([
-    { id: "u1", name: "Aarav Sharma", plan: PLAN_WEEKLY, activeWindow: "today" },
-    { id: "u2", name: "Meera Iyer", plan: PLAN_MONTHLY, activeWindow: "week" },
-    { id: "u3", name: "Rohan Patel", plan: PLAN_FREE, activeWindow: "today" },
-    { id: "u4", name: "Ishita Verma", plan: PLAN_MONTHLY, activeWindow: "week" },
-    { id: "u5", name: "Kabir Rao", plan: PLAN_WEEKLY, activeWindow: "inactive" }
-  ]);
+  const [users, setUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(true);
 
   const [uploadFeedback, setUploadFeedback] = useState("");
   const [selectedPlan, setSelectedPlan] = useState(PLAN_WEEKLY);
@@ -308,6 +304,55 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
 
     return () => {
       isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const fetchUsers = async () => {
+      try {
+        const adminSession = getAdminSessionHeader();
+        if (!adminSession) {
+          if (isActive) {
+            setUsers([]);
+            setUsersLoading(false);
+          }
+          return;
+        }
+
+        const response = await fetch(buildApiUrl("/api/admin/users"), {
+          method: "GET",
+          headers: {
+            "x-admin-session": adminSession,
+            "Content-Type": "application/json"
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to load users");
+        }
+
+        const data = await response.json();
+        if (isActive) {
+          setUsers(Array.isArray(data.users) ? data.users : []);
+          setUsersLoading(false);
+        }
+      } catch (error) {
+        console.error("Failed to load admin users:", error);
+        if (isActive) {
+          setUsers([]);
+          setUsersLoading(false);
+        }
+      }
+    };
+
+    fetchUsers();
+    const intervalId = setInterval(fetchUsers, 30000);
+
+    return () => {
+      isActive = false;
+      clearInterval(intervalId);
     };
   }, []);
 
@@ -1069,17 +1114,33 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
             <article className="panel-card users-panel">
               <h2><FiUsers /> Users and Access</h2>
               <div className="user-list">
-                {users.map((user) => (
-                  <div key={user.id} className="user-row">
+                {usersLoading ? (
+                  <div className="user-row">
                     <div>
-                      <h4>{user.name}</h4>
-                      <p>Plan: {user.plan}</p>
+                      <h4>Loading users...</h4>
+                      <p>Fetching latest activity data.</p>
                     </div>
-                    <span className={user.activeWindow === "inactive" ? "status-dot inactive" : "status-dot"}>
-                      {user.activeWindow === "today" ? "Active Today" : user.activeWindow === "week" ? "Active This Week" : "Inactive"}
-                    </span>
                   </div>
-                ))}
+                ) : users.length > 0 ? (
+                  users.map((user) => (
+                    <div key={user.id} className="user-row">
+                      <div>
+                        <h4>{user.name}</h4>
+                        <p>Plan: {user.plan}</p>
+                      </div>
+                      <span className={user.activeWindow === "inactive" ? "status-dot inactive" : "status-dot"}>
+                        {user.activeWindow === "today" ? "Active Today" : user.activeWindow === "week" ? "Active This Week" : "Inactive"}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="user-row">
+                    <div>
+                      <h4>No user activity yet</h4>
+                      <p>Users will appear once they register or attempt tests.</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </article>
           ) : null}

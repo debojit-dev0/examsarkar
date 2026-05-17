@@ -2,11 +2,25 @@ import { buildApiUrl } from "./apiBaseUrl";
 
 const LEGACY_STORAGE_KEY = "examSarkarAdminTests";
 
-const request = async (path, method = "GET", payload) => {
+const getAdminSessionHeader = () => {
+  try {
+    const rawSession = window.localStorage.getItem("admin_session");
+    if (!rawSession) return null;
+    return btoa(rawSession);
+  } catch {
+    return null;
+  }
+};
+
+const getUserAccessToken = () =>
+  window.localStorage.getItem("accessToken") || window.localStorage.getItem("token");
+
+const request = async (path, method = "GET", payload, headers = {}) => {
   const response = await fetch(buildApiUrl(path), {
     method,
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      ...headers
     },
     body: payload ? JSON.stringify(payload) : undefined
   });
@@ -21,11 +35,36 @@ const request = async (path, method = "GET", payload) => {
 };
 
 export async function loadAdminTests() {
-  const result = await request("/api/admin/tests");
-  const remoteTests = Array.isArray(result.tests) ? result.tests : [];
+  try {
+    const adminSession = getAdminSessionHeader();
+    if (adminSession) {
+      const result = await request("/api/admin/tests", "GET", undefined, {
+        "x-admin-session": adminSession
+      });
+      const remoteTests = Array.isArray(result.tests) ? result.tests : [];
+      if (remoteTests.length > 0) {
+        return remoteTests;
+      }
+    }
 
-  if (remoteTests.length > 0) {
-    return remoteTests;
+    const accessToken = getUserAccessToken();
+    if (accessToken) {
+      const result = await request("/api/user/tests", "GET", undefined, {
+        Authorization: `Bearer ${accessToken}`
+      });
+      const accessibleTests = Array.isArray(result.accessibleTests) ? result.accessibleTests : [];
+      if (accessibleTests.length > 0) {
+        return accessibleTests;
+      }
+    }
+
+    const publicResult = await request("/api/tests");
+    const publicTests = Array.isArray(publicResult.tests) ? publicResult.tests : [];
+    if (publicTests.length > 0) {
+      return publicTests;
+    }
+  } catch (error) {
+    console.error("Failed to load tests:", error);
   }
 
   try {
@@ -44,9 +83,18 @@ export async function loadAdminTests() {
 }
 
 export async function saveAdminTests(tests) {
-  const result = await request("/api/admin/tests", "PUT", { tests });
+  const adminSession = getAdminSessionHeader();
+  if (!adminSession) {
+    throw new Error("Admin session required to save tests.");
+  }
+
+  const result = await request("/api/admin/tests", "PUT", { tests }, {
+    "x-admin-session": adminSession
+  });
   return Array.isArray(result.tests) ? result.tests : [];
 }
+
+export { getAdminSessionHeader };
 
 export function getLatestFreeDailyQuiz(tests) {
   const source = tests || [];

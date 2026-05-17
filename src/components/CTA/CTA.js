@@ -2,7 +2,10 @@ import React from "react";
 import "./CTA.css";
 import { FaUsers, FaStar, FaClipboardCheck } from "react-icons/fa";
 
-const CTA = ({ onStartFreeTest, onExploreTestSeries }) => {
+const CTA = ({ onStartFreeTest, onExploreTestSeries, stats }) => {
+  const totalRegistered = Number(stats?.totalRegistered || 0);
+  const formattedRegistered = totalRegistered > 0 ? totalRegistered.toLocaleString() : "10,000+";
+
   return (
     <div className="cta-container">
 
@@ -14,7 +17,7 @@ const CTA = ({ onStartFreeTest, onExploreTestSeries }) => {
         <div className="cta-stats">
           <div className="stat">
             <FaUsers />
-            <h3>10,000+</h3>
+            <h3>{formattedRegistered}</h3>
             <p>Students Registered</p>
           </div>
 

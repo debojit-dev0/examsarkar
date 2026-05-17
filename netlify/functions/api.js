@@ -74,6 +74,7 @@ const sha256 = (text) =>
 
 const ADMIN_TESTS_PATH = "adminTests";
 const USER_PURCHASES_PATH = "userPurchases";
+const USER_TEST_ATTEMPTS_PATH = "userTestAttempts";
 
 const normalizeList = (value) => {
   if (Array.isArray(value)) return value.filter(Boolean);
@@ -161,6 +162,30 @@ const buildAdminSession = (adminRecord) => ({
   role: adminRecord.role || "content-admin"
 });
 
+const verifyAdminToken = async (req, res, next) => {
+  try {
+    const session = req.headers["x-admin-session"];
+    if (!session) {
+      return res.status(401).json({ message: "Unauthorized: Admin session required" });
+    }
+
+    try {
+      const decoded = JSON.parse(Buffer.from(session, "base64").toString("utf-8"));
+      if (!decoded.uid || !decoded.role || (decoded.role !== "super-admin" && decoded.role !== "content-admin")) {
+        return res.status(401).json({ message: "Unauthorized: Invalid admin session" });
+      }
+
+      req.admin = decoded;
+      next();
+    } catch (parseError) {
+      return res.status(401).json({ message: "Unauthorized: Invalid session format" });
+    }
+  } catch (error) {
+    console.error("Admin verification error:", error.message);
+    return res.status(401).json({ message: "Unauthorized: Admin verification failed" });
+  }
+};
+
 const JWT_SECRET = process.env.JWT_SECRET || process.env.REACT_APP_JWT_SECRET || "dev-jwt-secret";
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || process.env.REACT_APP_JWT_REFRESH_SECRET || JWT_SECRET;
 const JWT_EXPIRATION = process.env.JWT_EXPIRATION || "15m";
@@ -224,6 +249,17 @@ app.get('/api/payment/config', (req, res) => {
   }
 });
 
+app.get("/api/tests", async (req, res) => {
+  try {
+    const snapshot = await database.ref(ADMIN_TESTS_PATH).get();
+    const tests = normalizeList(snapshot.val()).filter((test) => test?.access === "free");
+    return res.status(200).json({ tests });
+  } catch (error) {
+    console.error("Public tests fetch error:", error.message);
+    return res.status(500).json({ message: "Failed to load tests" });
+  }
+});
+
 app.get("/api/user/tests", verifyToken, async (req, res) => {
   try {
     const uid = req.user.uid;
@@ -272,7 +308,7 @@ app.get("/api/user/tests", verifyToken, async (req, res) => {
   }
 });
 
-app.get("/api/admin/tests", async (req, res) => {
+app.get("/api/admin/tests", verifyAdminToken, async (req, res) => {
   try {
     const snapshot = await database.ref(ADMIN_TESTS_PATH).get();
     return res.status(200).json({ tests: normalizeList(snapshot.val()) });
@@ -282,7 +318,7 @@ app.get("/api/admin/tests", async (req, res) => {
   }
 });
 
-app.put("/api/admin/tests", async (req, res) => {
+app.put("/api/admin/tests", verifyAdminToken, async (req, res) => {
   try {
     const tests = Array.isArray(req.body?.tests) ? req.body.tests : null;
     if (!tests || tests.length === 0) {
@@ -290,8 +326,8 @@ app.put("/api/admin/tests", async (req, res) => {
     }
 
     for (const test of tests) {
-      if (!test.id || !test.title) {
-        return res.status(400).json({ message: "Each test must have id and title" });
+      if (!test.id || (!test.title && !test.testName)) {
+        return res.status(400).json({ message: "Each test must have id and title/testName" });
       }
     }
 
@@ -300,6 +336,65 @@ app.put("/api/admin/tests", async (req, res) => {
   } catch (error) {
     console.error("Save admin tests error:", error.message);
     return res.status(500).json({ message: "Failed to save tests" });
+  }
+});
+
+app.get("/api/admin/users", verifyAdminToken, async (req, res) => {
+  try {
+    const [usersSnapshot, purchasesSnapshot, attemptsSnapshot] = await Promise.all([
+      database.ref("users").get(),
+      database.ref(USER_PURCHASES_PATH).get(),
+      database.ref(USER_TEST_ATTEMPTS_PATH).get()
+    ]);
+
+    const usersData = usersSnapshot.val() || {};
+    const purchasesData = purchasesSnapshot.val() || {};
+    const attemptsData = attemptsSnapshot.val() || {};
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - 7);
+    weekStart.setHours(0, 0, 0, 0);
+
+    const users = Object.entries(usersData).map(([uid, user]) => {
+      const userPurchases = normalizeList(purchasesData[uid] || {})
+        .filter((purchase) => purchase.status === "paid")
+        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+      const latestPurchase = userPurchases[0];
+      const purchasePlan = latestPurchase ? getPurchasePlan(latestPurchase) : null;
+
+      const attempts = normalizeList(attemptsData[uid] || {});
+      const latestAttempt = attempts.reduce((latest, attempt) => {
+        const submittedAt = new Date(attempt?.submittedAt || 0).getTime();
+        if (!Number.isFinite(submittedAt)) return latest;
+        return submittedAt > latest ? submittedAt : latest;
+      }, 0);
+
+      let activeWindow = "inactive";
+      if (latestAttempt) {
+        const latestDate = new Date(latestAttempt);
+        if (latestDate >= todayStart) {
+          activeWindow = "today";
+        } else if (latestDate >= weekStart) {
+          activeWindow = "week";
+        }
+      }
+
+      const fullName = `${user.firstName || ""} ${user.lastName || ""}`.trim();
+      return {
+        id: uid,
+        name: fullName || user.email || "User",
+        plan: purchasePlan?.planKey || "free",
+        activeWindow
+      };
+    });
+
+    return res.status(200).json({ users });
+  } catch (error) {
+    console.error("Admin users fetch error:", error.message);
+    return res.status(500).json({ message: "Failed to load users" });
   }
 });
 

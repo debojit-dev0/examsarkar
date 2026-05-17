@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FaBolt,
   FaGlobe,
@@ -35,13 +36,26 @@ const testSeriesData = [
 ];
 
 const TestSeries = () => {
+  const navigate = useNavigate();
+
   return (
     <div className="container">
       <h2 className="heading">Popular Test Series</h2>
 
       <div className="cards">
         {testSeriesData.map((item, index) => (
-          <div className="card" key={index}>
+          <div
+            className="card"
+            key={index}
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate("/test-series")}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                navigate("/test-series");
+              }
+            }}
+          >
             
             <div className="card-top">
               <div className="logo">
@@ -71,7 +85,16 @@ const TestSeries = () => {
               ))}
             </ul>
 
-            <button className="btn">View Test Series</button>
+            <button
+              className="btn"
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                navigate("/test-series");
+              }}
+            >
+              View Test Series
+            </button>
           </div>
         ))}
       </div>
