@@ -21,6 +21,7 @@ const TestPage = lazy(() => import("./pages/TestPage/TestPage"));
 const Dashboard = lazy(() => import("./pages/Dashboard/Dashboard"));
 const PaymentPage = lazy(() => import("./pages/PaymentPage"));
 const AdminAuthPage = lazy(() => import("./pages/Admin/AdminAuthPage"));
+const ContactPage = lazy(() => import("./pages/Contact/ContactPage"));
 
 const sectionFallback = <div style={{ minHeight: 120 }} />;
 
@@ -177,6 +178,7 @@ function AppContent() {
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/payment" element={<PaymentPage />} />
       <Route path="/admin" element={<AdminAuthPage />} />
+      <Route path="/contact" element={<ContactPage onLoginClick={handleLoginClick} onSignupClick={() => setAuthMode("signup")} onHomeClick={scrollToHero} onPlansClick={() => navigate("/test-series")} />} />
 
     </Routes>
     </Suspense>

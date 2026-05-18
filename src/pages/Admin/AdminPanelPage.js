@@ -19,7 +19,7 @@ import {
 } from "react-icons/fi";
 import JSZip from "jszip";
 import { buildApiUrl } from "../../utils/apiBaseUrl";
-import { getAdminSessionHeader, loadAdminTests, saveAdminTests } from "../../utils/adminTestsStore";
+import { getAdminSessionHeader, loadAdminOverview, loadAdminTests, saveAdminTests } from "../../utils/adminTestsStore";
 import "./AdminPanelPage.css";
 
 const ROLE_SUPER_ADMIN = "super-admin";
@@ -269,6 +269,12 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
 
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(true);
+  const [overviewStats, setOverviewStats] = useState({
+    totalUsers: null,
+    activeUsersToday: null,
+    activeUsersThisWeek: null,
+    totalAttempts: null
+  });
 
   const [uploadFeedback, setUploadFeedback] = useState("");
   const [selectedPlan, setSelectedPlan] = useState(PLAN_WEEKLY);
@@ -285,9 +291,20 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
 
     const fetchTests = async () => {
       try {
-        const remoteTests = await loadAdminTests();
+        const overview = await loadAdminOverview();
+        const remoteTests = Array.isArray(overview?.tests) && overview.tests.length > 0
+          ? overview.tests
+          : await loadAdminTests();
         if (!isActive) return;
         setTests(remoteTests);
+        if (overview?.summary) {
+          setOverviewStats({
+            totalUsers: Number.isFinite(Number(overview.summary.totalUsers)) ? Number(overview.summary.totalUsers) : null,
+            activeUsersToday: Number.isFinite(Number(overview.summary.activeUsersToday)) ? Number(overview.summary.activeUsersToday) : null,
+            activeUsersThisWeek: Number.isFinite(Number(overview.summary.activeUsersThisWeek)) ? Number(overview.summary.activeUsersThisWeek) : null,
+            totalAttempts: Number.isFinite(Number(overview.summary.totalAttempts)) ? Number(overview.summary.totalAttempts) : null
+          });
+        }
       } catch (error) {
         console.error("Failed to load admin tests:", error);
         if (isActive) {
@@ -336,6 +353,15 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
         const data = await response.json();
         if (isActive) {
           setUsers(Array.isArray(data.users) ? data.users : []);
+          if (data.summary) {
+            setOverviewStats((prev) => ({
+              ...prev,
+              totalUsers: Number.isFinite(Number(data.summary.totalUsers)) ? Number(data.summary.totalUsers) : prev.totalUsers,
+              activeUsersToday: Number.isFinite(Number(data.summary.activeUsersToday)) ? Number(data.summary.activeUsersToday) : prev.activeUsersToday,
+              activeUsersThisWeek: Number.isFinite(Number(data.summary.activeUsersThisWeek)) ? Number(data.summary.activeUsersThisWeek) : prev.activeUsersThisWeek,
+              totalAttempts: Number.isFinite(Number(data.summary.totalAttempts)) ? Number(data.summary.totalAttempts) : prev.totalAttempts
+            }));
+          }
           setUsersLoading(false);
         }
       } catch (error) {
@@ -363,6 +389,14 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
       console.error("Failed to save admin tests:", error);
     });
   }, [tests, testsLoaded]);
+
+  useEffect(() => {
+    if (!usersLoading) return;
+    setOverviewStats((prev) => ({
+      ...prev,
+      totalUsers: prev.totalUsers ?? users.length
+    }));
+  }, [users, usersLoading]);
 
   const reviewedTest = useMemo(
     () => tests.find((test) => test.id === reviewedTestId) || null,
@@ -408,12 +442,12 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
   }, [tests, planSettings]);
 
   const dashboardMetrics = useMemo(() => {
-    const totalUsers = users.length;
-    const activeUsersToday = users.filter((user) => user.activeWindow === "today").length;
-    const activeUsersThisWeek = users.filter((user) => user.activeWindow === "today" || user.activeWindow === "week").length;
+    const totalUsers = overviewStats.totalUsers ?? users.length;
+    const activeUsersToday = overviewStats.activeUsersToday ?? users.filter((user) => user.activeWindow === "today").length;
+    const activeUsersThisWeek = overviewStats.activeUsersThisWeek ?? users.filter((user) => user.activeWindow === "today" || user.activeWindow === "week").length;
     const totalTestsCreated = tests.length;
 
-    const totalAttempts = tests.reduce((count, test) => {
+    const totalAttempts = overviewStats.totalAttempts ?? tests.reduce((count, test) => {
       const intensity = test.type === "daily-quiz" ? 4 : test.type === "daily" ? 3 : 2;
       return count + intensity * 12;
     }, 0);
@@ -477,7 +511,8 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
 
     // Persist deletion to backend
     try {
-      await saveAdminTests(updatedTests);
+      const savedTests = await saveAdminTests(updatedTests);
+      setTests(savedTests);
     } catch (error) {
       console.error("Failed to delete test:", error);
       alert("Failed to delete test. Please try again.");
@@ -678,7 +713,9 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
         }
       };
 
-      setTests((prev) => [newTest, ...prev]);
+      const nextTests = [newTest, ...tests];
+      const savedTests = await saveAdminTests(nextTests);
+      setTests(savedTests);
       setUploadFeedback(
         `Uploaded successfully. ${newTest.testName} parsed ${questionCount} questions${parsedQuestions.length ? " with highlighted answers" : ""}.`
       );

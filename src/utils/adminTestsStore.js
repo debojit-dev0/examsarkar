@@ -38,7 +38,7 @@ export async function loadAdminTests() {
   try {
     const adminSession = getAdminSessionHeader();
     if (adminSession) {
-      const result = await request("/api/admin/tests", "GET", undefined, {
+      const result = await request("/api/admin/overview", "GET", undefined, {
         "x-admin-session": adminSession
       });
       const remoteTests = Array.isArray(result.tests) ? result.tests : [];
@@ -79,6 +79,20 @@ export async function loadAdminTests() {
     return legacyTests;
   } catch {
     return [];
+  }
+}
+
+export async function loadAdminOverview() {
+  const adminSession = getAdminSessionHeader();
+  if (!adminSession) return null;
+
+  try {
+    return await request("/api/admin/overview", "GET", undefined, {
+      "x-admin-session": adminSession
+    });
+  } catch (error) {
+    console.error("Failed to load admin overview:", error);
+    return null;
   }
 }
 

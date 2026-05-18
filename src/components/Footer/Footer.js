@@ -60,7 +60,11 @@ export default function Footer() {
             <li><FaArrowRight /> Help Center</li>
             <li><FaArrowRight /> Privacy Policy</li>
             <li><FaArrowRight /> Terms</li>
-            <li><FaArrowRight /> Contact</li>
+            <li>
+              <button type="button" onClick={() => navigate("/contact")}> 
+                <FaArrowRight /> Contact
+              </button>
+            </li>
           </ul>
         </div>
 

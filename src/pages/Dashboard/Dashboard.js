@@ -170,6 +170,8 @@ const Dashboard = () => {
     : [];
   const displayedActivity = showAllActivity ? recentActivity : recentActivity.slice(0, 5);
   const primaryTest = getFilteredTests(purchaseData.accessibleTests)[0] || null;
+  const liveNowUsers = Number.isFinite(Number(dashboardStats?.liveNow)) ? Number(dashboardStats.liveNow) : 25;
+  const liveTestMoreUsers = Math.max(liveNowUsers - liveTestUsers.length, 0);
   const perfTiles = [
     {
       id: 1,
@@ -230,19 +232,10 @@ const Dashboard = () => {
           {/* Stats Cards */}
           <div className="stats-container">
             <div className="stat-card">
-              <div className="stat-icon users-icon">👥</div>
-              <div className="stat-content">
-                <p className="stat-label">Total Registered Users</p>
-                <p className="stat-value">{(dashboardStats?.totalRegistered ?? 0).toLocaleString()}</p>
-                <p className="stat-change">+{(dashboardStats?.weeklyIncrease ?? 0).toLocaleString()} this week</p>
-              </div>
-            </div>
-
-            <div className="stat-card">
               <div className="stat-icon live-icon">🟢</div>
               <div className="stat-content">
                 <p className="stat-label">Live Now Users</p>
-                <p className="stat-value">{dashboardStats?.liveNow ?? 0}</p>
+                <p className="stat-value">{liveNowUsers}</p>
                 <p className="stat-change">Online & learning</p>
               </div>
             </div>
@@ -423,14 +416,14 @@ const Dashboard = () => {
               <span className="live-badge">● LIVE</span>
             </div>
 
-            <p className="live-description">348 learners are taking</p>
+            <p className="live-description">{liveNowUsers} learners are taking</p>
             <p className="live-test-title">Free Prelims Test – Polity</p>
 
             <div className="live-users">
               {liveTestUsers.map((user, idx) => (
                 <div key={idx} className="user-avatar">{user.avatar}</div>
               ))}
-              <span className="more-users">+343</span>
+              <span className="more-users">+{liveTestMoreUsers}</span>
             </div>
 
             <button className="join-test-button" onClick={handleNavigateToTest}>

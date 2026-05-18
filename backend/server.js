@@ -59,7 +59,7 @@ app.use(
       return callback(new Error("CORS policy: Origin not allowed"), false);
     },
     credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-admin-session"],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     maxAge: 3600
   })
@@ -1158,7 +1158,7 @@ app.get("/api/admin/tests", verifyAdminToken, async (req, res) => {
 });
 
 app.put("/api/admin/tests", verifyAdminToken, [
-  body("tests").isArray().notEmpty()
+  body("tests").isArray()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -1194,6 +1194,11 @@ app.get("/api/admin/users", verifyAdminToken, async (req, res) => {
     const usersData = usersSnapshot.val() || {};
     const purchasesData = purchasesSnapshot.val() || {};
     const attemptsData = attemptsSnapshot.val() || {};
+    const userIds = new Set([
+      ...Object.keys(usersData),
+      ...Object.keys(purchasesData),
+      ...Object.keys(attemptsData)
+    ]);
 
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -1201,7 +1206,8 @@ app.get("/api/admin/users", verifyAdminToken, async (req, res) => {
     weekStart.setDate(weekStart.getDate() - 7);
     weekStart.setHours(0, 0, 0, 0);
 
-    const users = Object.entries(usersData).map(([uid, user]) => {
+    const users = Array.from(userIds).map((uid) => {
+      const user = usersData[uid] || {};
       const userPurchases = normalizeList(purchasesData[uid] || {})
         .filter((purchase) => purchase.status === "paid")
         .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
@@ -1229,16 +1235,96 @@ app.get("/api/admin/users", verifyAdminToken, async (req, res) => {
       const fullName = `${user.firstName || ""} ${user.lastName || ""}`.trim();
       return {
         id: uid,
-        name: fullName || user.email || "User",
+        name: fullName || user.email || latestPurchase?.email || attempts[0]?.email || "User",
         plan: purchasePlan?.planKey || "free",
         activeWindow
       };
     });
 
-    return res.status(200).json({ users });
+    const summary = {
+      totalUsers: userIds.size,
+      activeUsersToday: users.filter((user) => user.activeWindow === "today").length,
+      activeUsersThisWeek: users.filter((user) => user.activeWindow === "today" || user.activeWindow === "week").length,
+      totalAttempts: Object.values(attemptsData).reduce((count, attemptsForUser) => count + normalizeList(attemptsForUser).length, 0)
+    };
+
+    return res.status(200).json({ users, summary });
   } catch (error) {
     console.error("Admin users fetch error:", error.message);
     return res.status(500).json({ message: "Failed to load users" });
+  }
+});
+
+app.get("/api/admin/overview", verifyAdminToken, async (req, res) => {
+  try {
+    const [testsSnapshot, usersSnapshot, purchasesSnapshot, attemptsSnapshot] = await Promise.all([
+      database.ref(ADMIN_TESTS_PATH).get(),
+      database.ref("users").get(),
+      database.ref(USER_PURCHASES_PATH).get(),
+      database.ref(USER_TEST_ATTEMPTS_PATH).get()
+    ]);
+
+    const tests = normalizeList(testsSnapshot.val());
+    const usersData = usersSnapshot.val() || {};
+    const purchasesData = purchasesSnapshot.val() || {};
+    const attemptsData = attemptsSnapshot.val() || {};
+    const userIds = new Set([
+      ...Object.keys(usersData),
+      ...Object.keys(purchasesData),
+      ...Object.keys(attemptsData)
+    ]);
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - 7);
+    weekStart.setHours(0, 0, 0, 0);
+
+    const users = Array.from(userIds).map((uid) => {
+      const user = usersData[uid] || {};
+      const userPurchases = normalizeList(purchasesData[uid] || {})
+        .filter((purchase) => purchase.status === "paid")
+        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+      const latestPurchase = userPurchases[0];
+      const attempts = normalizeList(attemptsData[uid] || {});
+      const latestAttempt = attempts.reduce((latest, attempt) => {
+        const submittedAt = new Date(attempt?.submittedAt || 0).getTime();
+        if (!Number.isFinite(submittedAt)) return latest;
+        return submittedAt > latest ? submittedAt : latest;
+      }, 0);
+
+      let activeWindow = "inactive";
+      if (latestAttempt) {
+        const latestDate = new Date(latestAttempt);
+        if (latestDate >= todayStart) {
+          activeWindow = "today";
+        } else if (latestDate >= weekStart) {
+          activeWindow = "week";
+        }
+      }
+
+      const fullName = `${user.firstName || ""} ${user.lastName || ""}`.trim();
+      return {
+        id: uid,
+        name: fullName || user.email || latestPurchase?.email || attempts[0]?.email || "User",
+        plan: latestPurchase ? getPurchasePlan(latestPurchase).planKey : "free",
+        activeWindow
+      };
+    });
+
+    const summary = {
+      totalUsers: userIds.size,
+      activeUsersToday: users.filter((user) => user.activeWindow === "today").length,
+      activeUsersThisWeek: users.filter((user) => user.activeWindow === "today" || user.activeWindow === "week").length,
+      totalAttempts: Object.values(attemptsData).reduce((count, attemptsForUser) => count + normalizeList(attemptsForUser).length, 0),
+      totalTestsCreated: tests.length
+    };
+
+    return res.status(200).json({ tests, users, summary });
+  } catch (error) {
+    console.error("Admin overview fetch error:", error.message);
+    return res.status(500).json({ message: "Failed to load overview" });
   }
 });
 
@@ -1247,12 +1333,13 @@ app.get("/api/admin/users", verifyAdminToken, async (req, res) => {
 app.get("/api/stats", async (req, res) => {
   try {
     const usersSnapshot = await database.ref(`users`).get();
-    const totalRegistered = usersSnapshot.exists()
+    const actualRegistered = usersSnapshot.exists()
       ? Object.keys(usersSnapshot.val()).length
       : 0;
+    const displayCount = actualRegistered + 100;
 
-    const weeklyIncrease = Math.max(0, Math.floor(totalRegistered * 0.01));
-    const liveNow = Math.max(0, Math.floor(totalRegistered * 0.02));
+    const weeklyIncrease = Math.max(1, Math.ceil(actualRegistered / 10));
+    const liveNow = actualRegistered + 25;
     const currentStreak = 7;
     const quizzesTotal = 25;
     const quizzesAttempted = Math.min(quizzesTotal, Math.floor(quizzesTotal * 0.48));
@@ -1260,7 +1347,7 @@ app.get("/api/stats", async (req, res) => {
 
     return res.status(200).json({
       stats: {
-        totalRegistered,
+        totalRegistered: displayCount,
         weeklyIncrease,
         liveNow,
         currentStreak,

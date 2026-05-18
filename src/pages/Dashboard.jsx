@@ -6,8 +6,6 @@ const Dashboard = () => {
   const [userName, setUserName] = useState('Shikha');
   const [searchQuery, setSearchQuery] = useState('');
   const [dashboardStats, setDashboardStats] = useState({
-    totalRegistered: 25341,
-    weeklyIncrease: 1234,
     liveNow: 348,
     currentStreak: 7,
     quizzesAttempted: 12,
@@ -78,15 +76,6 @@ const Dashboard = () => {
 
           {/* Stats Cards */}
           <div className="stats-container">
-            <div className="stat-card">
-              <div className="stat-icon users-icon">👥</div>
-              <div className="stat-content">
-                <p className="stat-label">Total Registered Users</p>
-                <p className="stat-value">{dashboardStats.totalRegistered.toLocaleString()}</p>
-                <p className="stat-change">+{dashboardStats.weeklyIncrease.toLocaleString()} this week</p>
-              </div>
-            </div>
-
             <div className="stat-card">
               <div className="stat-icon live-icon">🟢</div>
               <div className="stat-content">

@@ -1,3 +1,5 @@
+import { clearStoredAuthSession, refreshAccessToken, setStoredAuthSession } from "../api/authApi";
+
 // Toast notification component
 function showToast(message, type = 'info') {
   const toastContainer = document.createElement('div');
@@ -81,12 +83,28 @@ function showToast(message, type = 'info') {
 }
 
 // Handle 401 Unauthorized errors
-export function handleUnauthorized() {
-  // Clear all auth-related data
-  localStorage.removeItem('accessToken');
-  localStorage.removeItem('refreshToken');
-  localStorage.removeItem('token');
-  localStorage.removeItem('user');
+export async function handleUnauthorized() {
+  const refreshToken = localStorage.getItem('refreshToken');
+
+  if (refreshToken) {
+    try {
+      const refreshed = await refreshAccessToken(refreshToken);
+      const userRaw = localStorage.getItem('user');
+      const user = userRaw ? JSON.parse(userRaw) : null;
+      setStoredAuthSession({
+        user,
+        accessToken: refreshed.accessToken,
+        refreshToken
+      });
+
+      showToast('Session renewed. You can continue.', 'success');
+      return true;
+    } catch (error) {
+      console.error('Refresh token failed:', error);
+    }
+  }
+
+  clearStoredAuthSession();
   
   // Show friendly message
   showToast('Your session has expired. Please sign in again.', 'error');
@@ -95,6 +113,8 @@ export function handleUnauthorized() {
   setTimeout(() => {
     window.dispatchEvent(new CustomEvent('openAuthModal', { detail: { mode: 'login' } }));
   }, 300);
+
+  return false;
 }
 
 // Wrapper for API calls with error handling
@@ -104,7 +124,10 @@ export async function fetchWithErrorHandling(url, options = {}) {
     
     // Handle 401 Unauthorized
     if (response.status === 401) {
-      handleUnauthorized();
+      const renewed = await handleUnauthorized();
+      if (renewed) {
+        throw new Error('Unauthorized: Session renewed');
+      }
       throw new Error('Unauthorized: Session expired');
     }
     
