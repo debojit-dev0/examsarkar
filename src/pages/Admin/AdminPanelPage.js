@@ -476,7 +476,14 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
       todayAvgScore: todayQuiz ? stableScoreFromSeed(todayQuiz.id) : 0,
       yesterdayAvgScore: yesterdayQuiz ? stableScoreFromSeed(yesterdayQuiz.id) : 0
     };
-  }, [users, tests]);
+  }, [
+    users,
+    tests,
+    overviewStats.activeUsersThisWeek,
+    overviewStats.activeUsersToday,
+    overviewStats.totalAttempts,
+    overviewStats.totalUsers
+  ]);
 
   const visibleTestsForSelectedPlan = useMemo(() => {
     if (selectedPlan === PLAN_WEEKLY) return groupedTests.weeklySet;
