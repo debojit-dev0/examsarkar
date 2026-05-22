@@ -126,7 +126,7 @@ export async function fetchWithErrorHandling(url, options = {}) {
     if (response.status === 401) {
       const renewed = await handleUnauthorized();
       if (renewed) {
-        throw new Error('Unauthorized: Session renewed');
+        return fetch(url, options);
       }
       throw new Error('Unauthorized: Session expired');
     }

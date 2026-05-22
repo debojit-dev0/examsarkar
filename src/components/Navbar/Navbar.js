@@ -5,6 +5,7 @@ import { ChevronDown, LogOut } from "lucide-react";
 import { buildApiUrl } from "../../utils/apiBaseUrl";
 
 import { handleUnauthorized } from "../../utils/apiErrorHandler";
+import { clearStoredAuthSession } from "../../api/authApi";
 
 export default function Navbar({
   onLoginClick,
@@ -80,10 +81,7 @@ export default function Navbar({
 
   // ✅ Logout function
   const handleLogout = () => {
-    localStorage.removeItem("user");
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("token");
+    clearStoredAuthSession();
     setUser(null);
     setProfileData(null);
     setProfileDropdown(false);

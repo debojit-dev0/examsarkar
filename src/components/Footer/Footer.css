@@ -40,6 +40,12 @@
     gap: 14px;
     margin-top: 18px;
   }
+
+  .footer-socials a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
   
   .footer-socials svg {
     font-size: 16px;

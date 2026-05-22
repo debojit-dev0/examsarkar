@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import "./HeroSlider.css";
 import { FaBullseye, FaRocket } from "react-icons/fa";
+import { getSessionDisplayStats } from "../../utils/sessionDisplayStats";
 
 
 const images = [
@@ -27,8 +28,7 @@ export default function HeroSlider({ onStartFreeTest, onLoginClick, onDashboardC
     prefetch.src = nextImage;
   }, [nextImage]);
 
-  const liveNow = Number.isFinite(Number(stats?.liveNow)) ? Number(stats?.liveNow) : null;
-  const weeklyIncrease = Number.isFinite(Number(stats?.weeklyIncrease)) ? Number(stats?.weeklyIncrease) : null;
+  const { liveNow } = getSessionDisplayStats();
 
   return (
     <section className="heroSlider">
@@ -89,15 +89,6 @@ export default function HeroSlider({ onStartFreeTest, onLoginClick, onDashboardC
             <span className="live-dot"></span>
             {/* <FaFire className="tag-icon live-icon" /> */}
             <span>{liveNow !== null ? liveNow.toLocaleString() : "--"} Students are Live Now</span>
-          </div>
-
-          <div className="divider">•</div>
-
-          {/* REGISTERED (GREEN) */}
-          <div className="tag-item registered">
-            <span className="registered-dot"></span>
-            {/* <FaChartBar className="tag-icon green"></FaChartBar> */}
-            <span>{weeklyIncrease !== null ? weeklyIncrease.toLocaleString() : "--"} Registered This Week</span>
           </div>
 
           <div className="divider">•</div>

@@ -2,7 +2,7 @@ import "./SignupModal.css";
 import { FaTimes } from "react-icons/fa";
 import { Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
-import { registerUser } from "../../api/authApi";
+import { registerUser, setStoredAuthSession } from "../../api/authApi";
 
 export default function SignupModal({ isOpen, onClose, switchToLogin, planData }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -60,10 +60,7 @@ export default function SignupModal({ isOpen, onClose, switchToLogin, planData }
 
       // ✅ STORE USER AND TOKENS IN LOCALSTORAGE
       // NOTE: In production, these should be stored in httpOnly cookies instead
-      localStorage.setItem("user", JSON.stringify(user));
-      localStorage.setItem("accessToken", accessToken);
-      localStorage.setItem("refreshToken", refreshToken);
-      localStorage.setItem("token", accessToken);
+      setStoredAuthSession({ user, accessToken, refreshToken });
 
       // ✅ SUCCESS MESSAGE
       setSuccess("Registration successful!");

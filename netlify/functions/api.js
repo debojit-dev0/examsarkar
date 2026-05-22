@@ -7,7 +7,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Razorpay = require('razorpay');
 const serverless = require('serverless-http');
-const { body, validationResult } = require('express-validator');
+const { body, validationResult, param } = require('express-validator');
 
 dotenv.config();
 
@@ -682,6 +682,227 @@ app.post("/api/auth/refresh", async (req, res) => {
   } catch (error) {
     console.error("Refresh error:", error);
     return res.status(401).json({ message: "Invalid or expired refresh token." });
+  }
+});
+
+// User profile
+app.get("/api/user/profile", verifyToken, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const snapshot = await database.ref(`users/${uid}`).get();
+
+    if (!snapshot.exists()) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    const user = snapshot.val();
+    return res.status(200).json({
+      profile: {
+        uid,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phone: user.phone,
+        createdAt: user.createdAt
+      }
+    });
+  } catch (error) {
+    console.error("Profile error:", error);
+    return res.status(500).json({ message: "Failed to fetch profile." });
+  }
+});
+
+// User test attempts
+app.post(
+  "/api/user/test-attempts",
+  verifyToken,
+  [
+    body("testId").trim().isLength({ min: 1, max: 120 }),
+    body("testName").trim().isLength({ min: 1, max: 250 }),
+    body("score").isFloat({ min: 0, max: 100 }),
+    body("accuracy").isFloat({ min: 0, max: 100 }),
+    body("correct").isInt({ min: 0 }),
+    body("total").isInt({ min: 1 }),
+    body("attempted").isInt({ min: 0 }),
+    body("notAttempted").isInt({ min: 0 }),
+    body("reviewCount").isInt({ min: 0 }),
+    body("analysis").optional().isObject(),
+    body("answers").optional().isObject(),
+    body("markedForReview").optional().isObject()
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ message: "Invalid attempt payload" });
+      }
+
+      const { uid, email } = req.user;
+      const {
+        testId,
+        testName,
+        score,
+        accuracy,
+        correct,
+        total,
+        attempted,
+        notAttempted,
+        reviewCount,
+        analysis,
+        answers,
+        markedForReview
+      } = req.body;
+
+      const submittedAt = new Date().toISOString();
+      const attemptId = crypto.randomUUID();
+
+      const attemptRecord = {
+        attemptId,
+        uid,
+        email,
+        testId,
+        testName,
+        score: Number(score),
+        accuracy: Number(accuracy),
+        correct: Number(correct),
+        total: Number(total),
+        attempted: Number(attempted),
+        notAttempted: Number(notAttempted),
+        reviewCount: Number(reviewCount),
+        analysis: analysis && typeof analysis === "object" ? analysis : {
+          correct: Number(correct),
+          incorrect: Math.max(Number(total) - Number(correct), 0),
+          attempted: Number(attempted),
+          notAttempted: Number(notAttempted),
+          reviewCount: Number(reviewCount),
+          accuracy: Number(accuracy)
+        },
+        answers: answers && typeof answers === "object" ? answers : {},
+        markedForReview: markedForReview && typeof markedForReview === "object" ? markedForReview : {},
+        submittedAt,
+        createdAt: submittedAt
+      };
+
+      await database.ref(`${USER_TEST_ATTEMPTS_PATH}/${uid}/${attemptId}`).set(attemptRecord);
+
+      return res.status(201).json({
+        message: "Test attempt saved",
+        attemptId,
+        submittedAt
+      });
+    } catch (error) {
+      console.error("Save test attempt error:", error);
+      return res.status(500).json({ message: "Failed to save test attempt" });
+    }
+  }
+);
+
+app.get(
+  "/api/user/test-attempts/:attemptId",
+  verifyToken,
+  [param("attemptId").trim().isLength({ min: 1, max: 120 })],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ message: "Invalid attempt id" });
+      }
+
+      const { uid } = req.user;
+      const { attemptId } = req.params;
+
+      const attemptSnapshot = await database.ref(`${USER_TEST_ATTEMPTS_PATH}/${uid}/${attemptId}`).get();
+      if (!attemptSnapshot.exists()) {
+        return res.status(404).json({ message: "Attempt not found" });
+      }
+
+      return res.status(200).json({ attempt: attemptSnapshot.val() });
+    } catch (error) {
+      console.error("Load test attempt error:", error);
+      return res.status(500).json({ message: "Failed to load test attempt" });
+    }
+  }
+);
+
+app.get("/api/user/dashboard", verifyToken, async (req, res) => {
+  try {
+    const { uid } = req.user;
+
+    const [attemptsSnapshot, testsSnapshot] = await Promise.all([
+      database.ref(`${USER_TEST_ATTEMPTS_PATH}/${uid}`).get(),
+      database.ref(ADMIN_TESTS_PATH).get()
+    ]);
+
+    const attempts = normalizeList(attemptsSnapshot.val())
+      .filter((item) => item && item.submittedAt)
+      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+
+    const tests = normalizeList(testsSnapshot.val());
+    const totalAvailableTests = tests.length;
+    const quizzesAttempted = attempts.length;
+    const attemptPercentage = totalAvailableTests > 0
+      ? Math.round((quizzesAttempted / totalAvailableTests) * 100)
+      : 0;
+
+    const avgScore = attempts.length > 0
+      ? Math.round(attempts.reduce((sum, attempt) => sum + Number(attempt.score || 0), 0) / attempts.length)
+      : null;
+
+    const bestScore = attempts.length > 0
+      ? Math.max(...attempts.map((attempt) => Number(attempt.score || 0)))
+      : null;
+
+    const totalAttemptedQuestions = attempts.reduce((sum, attempt) => sum + Number(attempt.attempted || 0), 0);
+    const totalCorrectQuestions = attempts.reduce((sum, attempt) => sum + Number(attempt.correct || 0), 0);
+    const accuracy = totalAttemptedQuestions > 0
+      ? Math.round((totalCorrectQuestions / totalAttemptedQuestions) * 100)
+      : null;
+
+    const uniqueDateSet = new Set(
+      attempts
+        .map((attempt) => String(attempt.submittedAt || "").slice(0, 10))
+        .filter(Boolean)
+    );
+
+    let currentStreak = 0;
+    const cursor = new Date();
+    while (true) {
+      const day = cursor.toISOString().slice(0, 10);
+      if (!uniqueDateSet.has(day)) break;
+      currentStreak += 1;
+      cursor.setUTCDate(cursor.getUTCDate() - 1);
+    }
+
+    const recentQuizActivity = attempts.slice(0, 20).map((attempt) => ({
+      id: attempt.attemptId,
+      testId: attempt.testId,
+      title: attempt.testName,
+      score: `${Math.round(Number(attempt.score || 0))}%`,
+      accuracy: `${Math.round(Number(attempt.accuracy || 0))}%`,
+      attempted: Number(attempt.attempted || 0),
+      total: Number(attempt.total || 0),
+      submittedAt: attempt.submittedAt,
+      time: `${Math.max(Number(attempt.attempted || 0), 1)} questions`,
+      date: new Date(attempt.submittedAt).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+      })
+    }));
+
+    return res.status(200).json({
+      performanceSnapshot: { avgScore, bestScore, accuracy },
+      currentStreak,
+      quizAttempts: {
+        attempted: quizzesAttempted,
+        total: totalAvailableTests,
+        attemptPercentage
+      },
+      recentQuizActivity
+    });
+  } catch (error) {
+    console.error("Dashboard error:", error);
+    return res.status(500).json({ message: "Failed to load dashboard" });
   }
 });
 

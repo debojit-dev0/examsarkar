@@ -1,10 +1,11 @@
 import React from "react";
 import "./CTA.css";
 import { FaUsers, FaStar, FaClipboardCheck } from "react-icons/fa";
+import { getSessionDisplayStats } from "../../utils/sessionDisplayStats";
 
 const CTA = ({ onStartFreeTest, onExploreTestSeries, stats }) => {
-  const totalRegistered = Number(stats?.totalRegistered || 0);
-  const formattedRegistered = totalRegistered > 0 ? totalRegistered.toLocaleString() : "10,000+";
+  const { totalRegistered } = getSessionDisplayStats();
+  const formattedRegistered = Number(totalRegistered || 0).toLocaleString();
 
   return (
     <div className="cta-container">

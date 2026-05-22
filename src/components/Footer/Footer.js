@@ -19,10 +19,18 @@ export default function Footer() {
 
           {/* SOCIAL ICONS */}
           <div className="footer-socials">
-            <FaFacebookF />
-            <FaInstagram />
-            <FaTwitter />
-            <FaLinkedin />
+            <a href="https://www.facebook.com/share/1YEMvDGYew/" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+              <FaFacebookF />
+            </a>
+            <a href="https://www.instagram.com/_examsarkar_/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+              <FaInstagram />
+            </a>
+            <a href="https://x.com/" target="_blank" rel="noopener noreferrer" aria-label="X">
+              <FaTwitter />
+            </a>
+            <a href="https://www.linkedin.com/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+              <FaLinkedin />
+            </a>
           </div>
         </div>
 

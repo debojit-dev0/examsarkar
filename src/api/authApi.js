@@ -1,6 +1,8 @@
 import { buildApiUrl } from "../utils/apiBaseUrl";
+import { clearSessionDisplayStats } from "../utils/sessionDisplayStats";
 
 const AUTH_SESSION_KEY = "auth_session";
+const LOGIN_SESSION_ID_KEY = "examSarkarLoginSessionId";
 const request = async (path, payload) => {
   const response = await fetch(buildApiUrl(path), {
     method: "POST",
@@ -83,11 +85,13 @@ export const getStoredAuthSession = () => {
   }
 };
 
-export const setStoredAuthSession = ({ user, accessToken, refreshToken }) => {
+export const setStoredAuthSession = ({ user, accessToken, refreshToken, sessionId }) => {
+  const nextSessionId = sessionId || localStorage.getItem(LOGIN_SESSION_ID_KEY) || window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const session = {
     user: user || null,
     accessToken: accessToken || null,
     refreshToken: refreshToken || null,
+    sessionId: nextSessionId,
     updatedAt: new Date().toISOString()
   };
 
@@ -95,6 +99,7 @@ export const setStoredAuthSession = ({ user, accessToken, refreshToken }) => {
   if (session.accessToken) localStorage.setItem("accessToken", session.accessToken);
   if (session.refreshToken) localStorage.setItem("refreshToken", session.refreshToken);
   if (session.accessToken) localStorage.setItem("token", session.accessToken);
+  localStorage.setItem(LOGIN_SESSION_ID_KEY, nextSessionId);
   localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
 
   return session;
@@ -105,7 +110,9 @@ export const clearStoredAuthSession = () => {
   localStorage.removeItem("refreshToken");
   localStorage.removeItem("token");
   localStorage.removeItem("user");
+  localStorage.removeItem(LOGIN_SESSION_ID_KEY);
   localStorage.removeItem(AUTH_SESSION_KEY);
+  clearSessionDisplayStats();
 };
 
 export const restoreAuthSession = async () => {
@@ -120,7 +127,8 @@ export const restoreAuthSession = async () => {
   return setStoredAuthSession({
     user: session.user,
     accessToken: refreshed.accessToken,
-    refreshToken: session.refreshToken
+    refreshToken: session.refreshToken,
+    sessionId: session.sessionId || localStorage.getItem(LOGIN_SESSION_ID_KEY)
   });
 };
 

@@ -7,14 +7,14 @@
 [[plugins]]
   package = "@netlify/plugin-functions-install-core"
 
-[env]
-  # Local development env
-  [env.dev]
-    REACT_APP_BACKEND_URL = "http://localhost:5000"
-  
-  # Netlify production env
-  [env.production]
-    REACT_APP_BACKEND_URL = "/api"
+[context.development.environment]
+  REACT_APP_BACKEND_URL = "http://localhost:5000"
+
+[context.deploy-preview.environment]
+  REACT_APP_BACKEND_URL = "/api"
+
+[context.production.environment]
+  REACT_APP_BACKEND_URL = "/api"
 
 # Redirect all API calls to serverless functions
 [[redirects]]

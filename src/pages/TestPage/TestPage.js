@@ -4,6 +4,8 @@ import { loadAdminTests } from "../../utils/adminTestsStore";
 import { buildApiUrl } from "../../utils/apiBaseUrl";
 import Navbar from "../../components/Navbar/Navbar";
 import "./TestPage.css";
+import { saveRecentQuizActivity } from "../../utils/recentQuizActivityStore";
+import { fetchWithErrorHandling } from "../../utils/apiErrorHandler";
 
 export default function TestPage({ onLoginClick, onSignupClick }) {
   const { testId } = useParams();
@@ -249,10 +251,29 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
       timeTakenSeconds,
     };
 
+    const localSubmittedAt = new Date().toISOString();
+    saveRecentQuizActivity({
+      id: `${test.id}-${localSubmittedAt}`,
+      attemptId: null,
+      testId: test.id,
+      title: test.testName,
+      score: `${score}%`,
+      accuracy: `${accuracy}%`,
+      attempted,
+      total,
+      submittedAt: localSubmittedAt,
+      time: `${Math.max(attempted, 1)} questions`,
+      date: new Date(localSubmittedAt).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+      })
+    });
+
     const accessToken = localStorage.getItem("accessToken") || localStorage.getItem("token");
     if (accessToken) {
       try {
-        await fetch(buildApiUrl("/api/user/test-attempts"), {
+        const response = await fetchWithErrorHandling(buildApiUrl("/api/user/test-attempts"), {
           method: "POST",
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -283,6 +304,29 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
             timeLeftSeconds: capturedRemainingSeconds,
           }),
         });
+
+        if (response.ok) {
+          const savedAttempt = await response.json().catch(() => null);
+          if (savedAttempt?.attemptId) {
+            saveRecentQuizActivity({
+              id: savedAttempt.attemptId,
+              attemptId: savedAttempt.attemptId,
+              testId: test.id,
+              title: test.testName,
+              score: `${score}%`,
+              accuracy: `${accuracy}%`,
+              attempted,
+              total,
+              submittedAt: savedAttempt.submittedAt || localSubmittedAt,
+              time: `${Math.max(attempted, 1)} questions`,
+              date: new Date(savedAttempt.submittedAt || localSubmittedAt).toLocaleDateString("en-IN", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric"
+              })
+            });
+          }
+        }
       } catch (saveError) {
         console.error("Failed to save test attempt:", saveError);
       }

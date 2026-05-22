@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Search, ChevronRight, Radio } from 'lucide-react';
 import './Dashboard.css';
 import { buildApiUrl } from '../../utils/apiBaseUrl';
-import { handleUnauthorized } from '../../utils/apiErrorHandler';
+import { fetchWithErrorHandling, handleUnauthorized } from '../../utils/apiErrorHandler';
 import Navbar from "../../components/Navbar/Navbar";
 import { useNavigate } from 'react-router-dom';
+import { getSessionDisplayStats } from '../../utils/sessionDisplayStats';
+import { loadRecentQuizActivity, mergeRecentQuizActivity } from '../../utils/recentQuizActivityStore';
 
 const Dashboard = () => {
   const navigate = useNavigate(); // ✅ REQUIRED
@@ -35,9 +37,12 @@ const Dashboard = () => {
     const loadData = async () => {
       try {
         const accessToken = localStorage.getItem('accessToken');
+        const withTimeout = (promise, fallbackValue = null, timeoutMs = 5000) => {
+          const timeout = new Promise((resolve) => setTimeout(() => resolve(fallbackValue), timeoutMs));
+          return Promise.race([promise, timeout]);
+        };
 
-        // FETCH PROFILE
-        const profileRes = await fetch(buildApiUrl('/api/user/profile'), {
+        const profileRequest = fetchWithErrorHandling(buildApiUrl('/api/user/profile'), {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${accessToken || ''}`,
@@ -45,18 +50,38 @@ const Dashboard = () => {
           }
         });
 
-        if (profileRes.status === 401) {
-          handleUnauthorized();
-          return;
-        }
+        const statsRequest = fetchWithErrorHandling(buildApiUrl('/api/stats'));
+        const dashboardRequest = accessToken
+          ? fetchWithErrorHandling(buildApiUrl('/api/user/dashboard'), {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+              }
+            })
+          : Promise.resolve(null);
+        const testsRequest = accessToken
+          ? fetchWithErrorHandling(buildApiUrl('/api/user/tests'), {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+              }
+            })
+          : Promise.resolve(null);
+
+        const [profileRes, statsRes, dashboardRes, testsRes] = await Promise.all([
+          profileRequest,
+          statsRequest,
+          withTimeout(dashboardRequest),
+          withTimeout(testsRequest)
+        ]);
 
         if (profileRes.ok) {
           const profileData = await profileRes.json();
           setUserName((profileData.profile && profileData.profile.firstName) || 'User');
         }
 
-        // FETCH STATS
-        const statsRes = await fetch(buildApiUrl('/api/stats'));
         if (statsRes.ok) {
           const statsJson = await statsRes.json();
           setDashboardStats(statsJson.stats || null);
@@ -65,20 +90,7 @@ const Dashboard = () => {
 
         // FETCH USER DASHBOARD + UNLOCKED TESTS
         if (accessToken) {
-          const dashboardRes = await fetch(buildApiUrl('/api/user/dashboard'), {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
-            }
-          });
-
-          if (dashboardRes.status === 401) {
-            handleUnauthorized();
-            return;
-          }
-
-          if (dashboardRes.ok) {
+          if (dashboardRes && dashboardRes.ok) {
             const dashboardJson = await dashboardRes.json();
             setUserDashboard({
               performanceSnapshot: dashboardJson.performanceSnapshot || { avgScore: null, bestScore: null, accuracy: null },
@@ -88,20 +100,7 @@ const Dashboard = () => {
             });
           }
 
-          const testsRes = await fetch(buildApiUrl('/api/user/tests'), {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
-            }
-          });
-
-          if (testsRes.status === 401) {
-            handleUnauthorized();
-            return;
-          }
-
-          if (testsRes.ok) {
+          if (testsRes && testsRes.ok) {
             const testsJson = await testsRes.json();
             setPurchaseData({
               loading: false,
@@ -165,13 +164,14 @@ const Dashboard = () => {
   };
 
   const unlockedTests = purchaseData.purchasedPlans.length > 0 ? getFilteredTests(purchaseData.accessibleTests).slice(0, 6) : [];
-  const recentActivity = Array.isArray(userDashboard.recentQuizActivity)
-    ? userDashboard.recentQuizActivity
-    : [];
+  const recentActivity = mergeRecentQuizActivity(
+    Array.isArray(userDashboard.recentQuizActivity) ? userDashboard.recentQuizActivity : [],
+    loadRecentQuizActivity()
+  );
   const displayedActivity = showAllActivity ? recentActivity : recentActivity.slice(0, 5);
   const primaryTest = getFilteredTests(purchaseData.accessibleTests)[0] || null;
-  const liveNowUsers = Number.isFinite(Number(dashboardStats?.liveNow)) ? Number(dashboardStats.liveNow) : 25;
-  const liveTestMoreUsers = Math.max(liveNowUsers - liveTestUsers.length, 0);
+  const { liveNow } = getSessionDisplayStats();
+  const liveTestMoreUsers = Math.max(liveNow - liveTestUsers.length, 0);
   const perfTiles = [
     {
       id: 1,
@@ -235,7 +235,7 @@ const Dashboard = () => {
               <div className="stat-icon live-icon">🟢</div>
               <div className="stat-content">
                 <p className="stat-label">Live Now Users</p>
-                <p className="stat-value">{liveNowUsers}</p>
+                <p className="stat-value">{liveNow}</p>
                 <p className="stat-change">Online & learning</p>
               </div>
             </div>
@@ -403,7 +403,6 @@ const Dashboard = () => {
             </div>
 
             <p className="performance-text">Attempt tests to see your performance insights.</p>
-            <button className="test-now-button" onClick={handleNavigateToTest}>Take a Test Now</button>
           </div>
 
           {/* Live Test Now */}
@@ -416,7 +415,7 @@ const Dashboard = () => {
               <span className="live-badge">● LIVE</span>
             </div>
 
-            <p className="live-description">{liveNowUsers} learners are taking</p>
+            <p className="live-description">{liveNow} learners are taking</p>
             <p className="live-test-title">Free Prelims Test – Polity</p>
 
             <div className="live-users">
