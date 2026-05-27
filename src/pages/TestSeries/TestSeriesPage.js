@@ -7,43 +7,11 @@ import PlanSection from "../../components/PlanCard/PlanSection";
 import SignupModal from "../../components/Auth/SignupModal";
 import LoginModal from "../../components/Auth/LoginModal";
 import { preloadRazorpayCheckout, startPaymentCheckout } from "../../components/Payment/PaymentModal";
-import { loadAdminTests } from "../../utils/adminTestsStore";
 
 export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
   const navigate = useNavigate();
   const [authMode, setAuthMode] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(null); // Store which plan user selected
-  const [freeTests, setFreeTests] = useState([]);
-  const [freeTestsLoading, setFreeTestsLoading] = useState(true);
-  const [selectedTestId, setSelectedTestId] = useState(null); // Track which test triggered auth
-
-  const isLoggedIn = () => {
-    return Boolean(localStorage.getItem("accessToken") || localStorage.getItem("refreshToken"));
-  };
-
-  const handleAttemptQuiz = (test) => {
-    const testId = test?.id;
-    if (!testId) return;
-
-    if (!isLoggedIn() && test?.access !== "free") {
-      // Store the test ID and show login modal
-      setSelectedTestId(testId);
-      setAuthMode("login");
-      return;
-    }
-
-    // Navigate to quiz page with test ID
-    navigate(`/test/${testId}`, { state: { testId } });
-  };
-
-  // After modal closes, check if logged in and navigate to test if needed
-  useEffect(() => {
-    if (authMode === null && selectedTestId && isLoggedIn()) {
-      // User just logged in and selected a test
-      navigate(`/test/${selectedTestId}`, { state: { testId: selectedTestId } });
-      setSelectedTestId(null);
-    }
-  }, [authMode, selectedTestId, navigate]);
   useEffect(() => {
     const handler = (e) => {
       const mode = e?.detail?.mode;
@@ -106,75 +74,6 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
     preloadRazorpayCheckout();
   }, []);
 
-  useEffect(() => {
-    let isActive = true;
-
-    const fetchFreeTests = async () => {
-      try {
-        setFreeTestsLoading(true);
-        const tests = await loadAdminTests();
-        console.log("[TestSeries] All tests loaded:", tests);
-        
-        if (!isActive) return;
-
-        const today = new Date().toISOString().split("T")[0];
-        const filtered = (Array.isArray(tests) ? tests : [])
-          .filter((test) => {
-            const isFree = test?.access === "free";
-            if (!isFree) return false;
-            if (test?.type === "daily-quiz") {
-              const testDate = String(test?.date || "").split("T")[0];
-              return testDate === today;
-            }
-            return true;
-          })
-          .sort((left, right) => {
-            const leftTime = new Date(left?.createdAt || 0).getTime();
-            const rightTime = new Date(right?.createdAt || 0).getTime();
-            return rightTime - leftTime;
-          });
-        
-        console.log("[TestSeries] Filtered free tests:", filtered);
-        setFreeTests(filtered);
-      } catch (error) {
-        console.error("[TestSeries] Failed to load free tests:", error);
-        if (isActive) {
-          setFreeTests([]);
-        }
-      } finally {
-        if (isActive) {
-          setFreeTestsLoading(false);
-        }
-      }
-    };
-
-    fetchFreeTests();
-
-    return () => {
-      isActive = false;
-    };
-  }, []);
-
-  const formatSubject = (subject) => {
-    const normalized = String(subject || "all").toLowerCase();
-    if (normalized === "ge") return "GS / GE";
-    if (normalized === "gs") return "GS / GE";
-    if (normalized === "csat") return "CSAT";
-    if (normalized === "combo") return "COMBO";
-    return normalized.toUpperCase();
-  };
-
-  const formatDate = (value) => {
-    if (!value) return "Always available";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return String(value);
-    return date.toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric"
-    });
-  };
-
   return (
     <>
       {/* ✅ Navbar now connected to App.js modal system */}
@@ -229,53 +128,12 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
             Built for serious aspirants • Based on real UPSC pattern
           </p>
 
-          {/* FREE TESTS AT TOP */}
           <section className="free-tests-section">
-            <div className="free-tests-header">
-              <h2>Free Tests Uploaded by Admin</h2>
-              <p>
-                {freeTestsLoading
-                  ? "Loading free tests..."
-                  : freeTests.length > 0
-                    ? "These free tests are available now."
-                    : "No free tests uploaded yet."}
-              </p>
+            <div className="free-tests-empty">
+              <div className="free-tests-empty-badge">NOT FOUND</div>
+              <h2>Free tests not found</h2>
+              <p>There are no uploaded free tests to show here right now.</p>
             </div>
-
-            {freeTestsLoading ? (
-              <div className="free-tests-grid">
-                <article className="free-test-card">
-                  <div className="free-test-topline">
-                    <span className="free-badge">LOADING</span>
-                  </div>
-                  <h3>Loading free tests...</h3>
-                  <p>Please wait while we fetch today's quizzes.</p>
-                </article>
-              </div>
-            ) : freeTests.length > 0 ? (
-              <div className="free-tests-grid">
-                {freeTests.map((test) => (
-                  <article key={test.id} className="free-test-card">
-                    <div className="free-test-topline">
-                      <span className="free-badge">FREE</span>
-                      <span className="free-test-type">{String(test.type || "daily").toUpperCase()}</span>
-                    </div>
-                    <h3>{test.testName || "Untitled Test"}</h3>
-                    <p>{formatSubject(test.subject)}</p>
-                    <div className="free-test-meta">
-                      <span>{test.questionCount || 0} questions</span>
-                      <span>{`Date: ${formatDate(test.date)}`}</span>
-                    </div>
-                    <button 
-                      className="attempt-quiz-btn"
-                      onClick={() => handleAttemptQuiz(test)}
-                    >
-                      Attempt Quiz →
-                    </button>
-                  </article>
-                ))}
-              </div>
-            ) : null}
           </section>
 
           {/* PLANS */}

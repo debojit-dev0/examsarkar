@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import "./HeroSlider.css";
 import { FaBullseye, FaRocket } from "react-icons/fa";
-import { getSessionDisplayStats } from "../../utils/sessionDisplayStats";
 
 
 const images = [
@@ -9,6 +8,8 @@ const images = [
   "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?q=80&w=1170&auto=format&fit=crop",
   "https://images.unsplash.com/photo-1522202176988-66273c2fd55f"
 ];
+
+const getRandomStat = () => Math.floor(Math.random() * 701) + 300;
 
 export default function HeroSlider({ onStartFreeTest, onLoginClick, onDashboardClick, isLoggedIn, stats }) {
   const [index, setIndex] = useState(0);
@@ -28,7 +29,7 @@ export default function HeroSlider({ onStartFreeTest, onLoginClick, onDashboardC
     prefetch.src = nextImage;
   }, [nextImage]);
 
-  const { liveNow } = getSessionDisplayStats();
+  const [liveNow] = useState(() => getRandomStat());
 
   return (
     <section className="heroSlider">

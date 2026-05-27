@@ -158,6 +158,37 @@ body {
     backdrop-filter: blur(12px);
   }
 
+  .free-tests-empty {
+    padding: 10px 4px;
+    text-align: center;
+  }
+
+  .free-tests-empty-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 12px;
+    margin-bottom: 14px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #f59e0b, #f97316);
+    color: #111827;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+  }
+
+  .free-tests-empty h2 {
+    margin: 0;
+    font-size: 24px;
+    color: #e2e8f0;
+  }
+
+  .free-tests-empty p {
+    margin: 10px 0 0;
+    color: #94a3b8;
+    line-height: 1.6;
+  }
+
   .free-tests-header h2 {
     margin: 0;
     font-size: 26px;

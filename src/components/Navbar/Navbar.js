@@ -1,10 +1,10 @@
 import "./Navbar.css";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, LogOut } from "lucide-react";
 import { buildApiUrl } from "../../utils/apiBaseUrl";
 
-import { handleUnauthorized } from "../../utils/apiErrorHandler";
+import { fetchWithErrorHandling } from "../../utils/apiErrorHandler";
 import { clearStoredAuthSession } from "../../api/authApi";
 
 export default function Navbar({
@@ -18,6 +18,7 @@ export default function Navbar({
   const [profileData, setProfileData] = useState(null);
   const profileSectionRef = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   // ✅ Get user from localStorage on mount
   useEffect(() => {
@@ -32,19 +33,19 @@ export default function Navbar({
     try {
       // Read token from storage
       const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
-      const response = await fetch(buildApiUrl("/api/user/profile"), {
+      if (!token) {
+        setProfileData((current) => current || user);
+        return;
+      }
+
+      const response = await fetchWithErrorHandling(buildApiUrl("/api/user/profile"), {
         method: "GET",
         headers: {
-          Authorization: `Bearer ${token || ""}`,
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json"
         }
       });
 
-
-      if (response.status === 401) {
-        handleUnauthorized();
-        return;
-      }
       if (!response.ok) {
         throw new Error("Failed to fetch profile");
       }
@@ -97,23 +98,45 @@ export default function Navbar({
   };
 
   const visibleProfile = profileData || user;
+  const handleHomeClick = () => {
+    if (location.pathname === "/" && onHomeClick) {
+      onHomeClick();
+      return;
+    }
+
+    if (onHomeClick && location.pathname === "/") {
+      onHomeClick();
+      return;
+    }
+
+    navigate("/");
+  };
+
+  const handlePlansClick = () => {
+    if (onPlansClick) {
+      onPlansClick();
+      return;
+    }
+
+    navigate("/test-series");
+  };
 
   return (
     <header className="navbar">
       <div
         className="logo"
-        onClick={onHomeClick}
+        onClick={handleHomeClick}
         style={{ cursor: "pointer" }}
       >
         <span className="logo-primary">Exam</span>
         <span className="logo-accent">Sarkar</span>
       </div>
       <nav className="nav-links">
-        <button type="button" className="nav-link" onClick={onHomeClick}>
+        <button type="button" className="nav-link" onClick={handleHomeClick}>
           Home
         </button>
 
-        <button type="button" className="nav-link" onClick={onPlansClick}>
+        <button type="button" className="nav-link" onClick={handlePlansClick}>
           Test Series
         </button>
 

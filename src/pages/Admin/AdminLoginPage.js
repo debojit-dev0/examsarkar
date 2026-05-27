@@ -24,7 +24,7 @@ export default function AdminLoginPage({ onLoginSuccess }) {
       setIsSubmitting(false);
     }
   };
-
+  
   return (
     <div className="admin-login-shell">
       <div className="admin-login-backdrop admin-login-backdrop-left" />

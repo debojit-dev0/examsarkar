@@ -30,12 +30,14 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
   useEffect(() => {
     const fetchTest = async () => {
       try {
+
         setLoading(true);
         const tests = await loadAdminTests();
-        const foundTest = tests.find((t) => t.id === testId);
+        const foundTest = tests.find((t) => String(t.id) === String(testId));
 
         if (!foundTest) {
           setError("Test not found");
+          setLoading(false);
           return;
         }
 

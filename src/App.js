@@ -25,6 +25,40 @@ const ContactPage = lazy(() => import("./pages/Contact/ContactPage"));
 
 const sectionFallback = <div style={{ minHeight: 120 }} />;
 
+function DeferredSection({ minHeight = 120, rootMargin = "250px 0px", children }) {
+  const [shouldRender, setShouldRender] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (shouldRender || !containerRef.current) return;
+
+    if (!("IntersectionObserver" in window)) {
+      setShouldRender(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setShouldRender(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin }
+    );
+
+    observer.observe(containerRef.current);
+
+    return () => observer.disconnect();
+  }, [rootMargin, shouldRender]);
+
+  return (
+    <div ref={containerRef} style={{ minHeight }}>
+      {shouldRender ? <Suspense fallback={sectionFallback}>{children}</Suspense> : sectionFallback}
+    </div>
+  );
+}
+
 
 // 🔥 NEW WRAPPER COMPONENT (handles navigation)
 function AppContent() {
@@ -125,46 +159,52 @@ function AppContent() {
             </div>
 
             {/* MAIN SECTIONS */}
-            <Suspense fallback={sectionFallback}>
+            <DeferredSection minHeight={180}>
               <Tiles />
-            </Suspense>
-            <Suspense fallback={sectionFallback}>
+            </DeferredSection>
+            <DeferredSection minHeight={180}>
               <WhyUs />
-            </Suspense>
+            </DeferredSection>
             {/* <FreeTest /> */}
-            <Suspense fallback={sectionFallback}>
+            <DeferredSection minHeight={160}>
               <HowItWorks />
-            </Suspense>
-            <Suspense fallback={sectionFallback}>
+            </DeferredSection>
+            <DeferredSection minHeight={160}>
               <Testimonials />
-            </Suspense>
-            <Suspense fallback={sectionFallback}>
+            </DeferredSection>
+            <DeferredSection minHeight={160}>
               <CTA
                 onStartFreeTest={handleStartFreeTest}
                 onExploreTestSeries={() => navigate("/test-series")}
                 stats={homeStats}
               />
-            </Suspense>
+            </DeferredSection>
 
             {/* FOOTER */}
-            <Suspense fallback={sectionFallback}>
+            <DeferredSection minHeight={140}>
               <Footer />
-            </Suspense>
+            </DeferredSection>
 
             {/* AUTH MODALS */}
-            <Suspense fallback={null}>
-              <SignupModal
-                isOpen={authMode === "signup"}
-                onClose={() => setAuthMode(null)}
-                switchToLogin={() => setAuthMode("login")}
-              />
+            {authMode === "signup" && (
+              <Suspense fallback={null}>
+                <SignupModal
+                  isOpen={authMode === "signup"}
+                  onClose={() => setAuthMode(null)}
+                  switchToLogin={() => setAuthMode("login")}
+                />
+              </Suspense>
+            )}
 
-              <LoginModal
-                isOpen={authMode === "login"}
-                onClose={() => setAuthMode(null)}
-                switchToSignup={() => setAuthMode("signup")}
-              />
-            </Suspense>
+            {authMode === "login" && (
+              <Suspense fallback={null}>
+                <LoginModal
+                  isOpen={authMode === "login"}
+                  onClose={() => setAuthMode(null)}
+                  switchToSignup={() => setAuthMode("signup")}
+                />
+              </Suspense>
+            )}
           </>
         }
       />

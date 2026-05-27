@@ -82,6 +82,31 @@ const normalizeList = (value) => {
   return [];
 };
 
+const getAttemptTimestamp = (attempt) =>
+  attempt?.submittedAt || attempt?.createdAt || attempt?.timestamp || attempt?.date || "1970-01-01T00:00:00.000Z";
+
+const normalizeAttemptEntries = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value !== "object") return [];
+
+  return Object.entries(value).flatMap(([key, entry]) => {
+    if (!entry) return [];
+
+    if (entry.attemptId || entry.testId || entry.submittedAt || entry.createdAt) {
+      return [{ attemptId: entry.attemptId || key, ...entry }];
+    }
+
+    if (typeof entry === "object") {
+      return Object.entries(entry)
+        .map(([childKey, child]) => (child ? { attemptId: child.attemptId || childKey, ...child } : null))
+        .filter(Boolean);
+    }
+
+    return [];
+  });
+};
+
 const normalizePlanPeriod = (value) => {
   const period = String(value || "").trim().toLowerCase();
   if (period === "daily" || period === "weekly" || period === "monthly") {
@@ -833,9 +858,25 @@ app.get("/api/user/dashboard", verifyToken, async (req, res) => {
       database.ref(ADMIN_TESTS_PATH).get()
     ]);
 
-    const attempts = normalizeList(attemptsSnapshot.val())
-      .filter((item) => item && item.submittedAt)
-      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+    let attempts = normalizeAttemptEntries(attemptsSnapshot.val())
+      .filter((item) => item && getAttemptTimestamp(item))
+      .sort((a, b) => new Date(getAttemptTimestamp(b)).getTime() - new Date(getAttemptTimestamp(a)).getTime());
+
+    if (attempts.length === 0) {
+      const allAttemptsSnapshot = await database.ref(USER_TEST_ATTEMPTS_PATH).get();
+      const allAttempts = normalizeAttemptEntries(allAttemptsSnapshot.val());
+      attempts = allAttempts
+        .filter((item) => item && getAttemptTimestamp(item))
+        .filter((item) => item.uid === uid || item.email === req.user.email)
+        .sort((a, b) => new Date(getAttemptTimestamp(b)).getTime() - new Date(getAttemptTimestamp(a)).getTime());
+
+      if (attempts.length === 0 && allAttempts.length > 0) {
+        console.warn("[dashboard] Falling back to legacy attempts without uid/email.");
+        attempts = allAttempts
+          .filter((item) => item && getAttemptTimestamp(item))
+          .sort((a, b) => new Date(getAttemptTimestamp(b)).getTime() - new Date(getAttemptTimestamp(a)).getTime());
+      }
+    }
 
     const tests = normalizeList(testsSnapshot.val());
     const totalAvailableTests = tests.length;
@@ -860,7 +901,7 @@ app.get("/api/user/dashboard", verifyToken, async (req, res) => {
 
     const uniqueDateSet = new Set(
       attempts
-        .map((attempt) => String(attempt.submittedAt || "").slice(0, 10))
+        .map((attempt) => String(getAttemptTimestamp(attempt) || "").slice(0, 10))
         .filter(Boolean)
     );
 
@@ -873,22 +914,27 @@ app.get("/api/user/dashboard", verifyToken, async (req, res) => {
       cursor.setUTCDate(cursor.getUTCDate() - 1);
     }
 
-    const recentQuizActivity = attempts.slice(0, 20).map((attempt) => ({
-      id: attempt.attemptId,
-      testId: attempt.testId,
-      title: attempt.testName,
-      score: `${Math.round(Number(attempt.score || 0))}%`,
-      accuracy: `${Math.round(Number(attempt.accuracy || 0))}%`,
-      attempted: Number(attempt.attempted || 0),
-      total: Number(attempt.total || 0),
-      submittedAt: attempt.submittedAt,
-      time: `${Math.max(Number(attempt.attempted || 0), 1)} questions`,
-      date: new Date(attempt.submittedAt).toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric"
-      })
-    }));
+    const recentQuizActivity = attempts.slice(0, 20).map((attempt) => {
+      const timestamp = getAttemptTimestamp(attempt);
+      return {
+        id: attempt.attemptId || attempt.id,
+        testId: attempt.testId,
+        title: attempt.testName,
+        score: `${Math.round(Number(attempt.score || 0))}%`,
+        accuracy: `${Math.round(Number(attempt.accuracy || 0))}%`,
+        attempted: Number(attempt.attempted || 0),
+        total: Number(attempt.total || 0),
+        submittedAt: timestamp,
+        time: `${Math.max(Number(attempt.attempted || 0), 1)} questions`,
+        date: timestamp
+          ? new Date(timestamp).toLocaleDateString("en-IN", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric"
+            })
+          : ""
+      };
+    });
 
     return res.status(200).json({
       performanceSnapshot: { avgScore, bestScore, accuracy },
@@ -979,25 +1025,30 @@ app.post("/api/payment/create-order", verifyToken, async (req, res) => {
     const receipt = `rcpt_${shortUid}_${ts}`;
 
     const order = await razorpay.orders.create({
-      amount,
-      currency: "INR",
-      receipt,
-      payment_capture: 1
+      attempts
+        .map((attempt) => String(getAttemptTimestamp(attempt) || "").slice(0, 10))
+        .filter(Boolean)
+    );
     });
-
-    await database.ref(`payments/${order.id}`).set({
-      uid,
-      orderId: order.id,
-      amount: order.amount,
-      currency: order.currency,
-      receipt: order.receipt,
-      status: "created",
-      createdAt: new Date().toISOString()
-    });
-
-    await database.ref(`userPayments/${uid}/${order.id}`).set({ status: "created", createdAt: new Date().toISOString() });
-
-    return res.status(201).json({ message: "Order created", order, key_id: process.env.RAZORPAY_KEY_ID });
+      const timestamp = getAttemptTimestamp(attempt);
+      return {
+        id: attempt.attemptId || attempt.id,
+        testId: attempt.testId,
+        title: attempt.testName,
+        score: `${Math.round(Number(attempt.score || 0))}%`,
+        accuracy: `${Math.round(Number(attempt.accuracy || 0))}%`,
+        attempted: Number(attempt.attempted || 0),
+        total: Number(attempt.total || 0),
+        submittedAt: timestamp,
+        time: `${Math.max(Number(attempt.attempted || 0), 1)} questions`,
+        date: timestamp
+          ? new Date(timestamp).toLocaleDateString("en-IN", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric"
+            })
+          : ""
+      };
   } catch (error) {
     console.error("Create order error:", error);
     return res.status(500).json({ message: "Failed to create order" });

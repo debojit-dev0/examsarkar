@@ -2,17 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Search, ChevronRight, Radio } from 'lucide-react';
 import './Dashboard.css';
 import { buildApiUrl } from '../../utils/apiBaseUrl';
-import { fetchWithErrorHandling, handleUnauthorized } from '../../utils/apiErrorHandler';
+import { fetchWithErrorHandling } from '../../utils/apiErrorHandler';
 import Navbar from "../../components/Navbar/Navbar";
 import { useNavigate } from 'react-router-dom';
-import { getSessionDisplayStats } from '../../utils/sessionDisplayStats';
 import { loadRecentQuizActivity, mergeRecentQuizActivity } from '../../utils/recentQuizActivityStore';
 
 const Dashboard = () => {
   const navigate = useNavigate(); // ✅ REQUIRED
   const [userName, setUserName] = useState('User');
   const [searchQuery, setSearchQuery] = useState('');
-  const [dashboardStats, setDashboardStats] = useState(null);
   const [purchaseData, setPurchaseData] = useState({ loading: true, purchasedPlans: [], accessibleTests: [] });
   const [userDashboard, setUserDashboard] = useState({
     performanceSnapshot: { avgScore: null, bestScore: null, accuracy: null },
@@ -34,83 +32,28 @@ const Dashboard = () => {
 
 
   useEffect(() => {
+    let isActive = true;
+
     const loadData = async () => {
+      let fastLoadTimerId = null;
       try {
         const accessToken = localStorage.getItem('accessToken');
-        const withTimeout = (promise, fallbackValue = null, timeoutMs = 5000) => {
-          const timeout = new Promise((resolve) => setTimeout(() => resolve(fallbackValue), timeoutMs));
-          return Promise.race([promise, timeout]);
-        };
+        const localActivities = loadRecentQuizActivity();
 
-        const profileRequest = fetchWithErrorHandling(buildApiUrl('/api/user/profile'), {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${accessToken || ''}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        const statsRequest = fetchWithErrorHandling(buildApiUrl('/api/stats'));
-        const dashboardRequest = accessToken
-          ? fetchWithErrorHandling(buildApiUrl('/api/user/dashboard'), {
-              method: 'GET',
-              headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-              }
-            })
-          : Promise.resolve(null);
-        const testsRequest = accessToken
-          ? fetchWithErrorHandling(buildApiUrl('/api/user/tests'), {
-              method: 'GET',
-              headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-              }
-            })
-          : Promise.resolve(null);
-
-        const [profileRes, statsRes, dashboardRes, testsRes] = await Promise.all([
-          profileRequest,
-          statsRequest,
-          withTimeout(dashboardRequest),
-          withTimeout(testsRequest)
-        ]);
-
-        if (profileRes.ok) {
-          const profileData = await profileRes.json();
-          setUserName((profileData.profile && profileData.profile.firstName) || 'User');
+        if (localActivities.length > 0) {
+          const localAttempted = localActivities.length;
+          setUserDashboard((current) => ({
+            ...current,
+            quizAttempts: {
+              attempted: localAttempted,
+              total: localAttempted,
+              attemptPercentage: localAttempted > 0 ? 100 : 0
+            },
+            recentQuizActivity: localActivities
+          }));
         }
 
-        if (statsRes.ok) {
-          const statsJson = await statsRes.json();
-          setDashboardStats(statsJson.stats || null);
-        }
-
-
-        // FETCH USER DASHBOARD + UNLOCKED TESTS
-        if (accessToken) {
-          if (dashboardRes && dashboardRes.ok) {
-            const dashboardJson = await dashboardRes.json();
-            setUserDashboard({
-              performanceSnapshot: dashboardJson.performanceSnapshot || { avgScore: null, bestScore: null, accuracy: null },
-              currentStreak: Number(dashboardJson.currentStreak || 0),
-              quizAttempts: dashboardJson.quizAttempts || { attempted: 0, total: 0, attemptPercentage: 0 },
-              recentQuizActivity: Array.isArray(dashboardJson.recentQuizActivity) ? dashboardJson.recentQuizActivity : []
-            });
-          }
-
-          if (testsRes && testsRes.ok) {
-            const testsJson = await testsRes.json();
-            setPurchaseData({
-              loading: false,
-              purchasedPlans: Array.isArray(testsJson.purchasedPlans) ? testsJson.purchasedPlans : [],
-              accessibleTests: Array.isArray(testsJson.accessibleTests) ? testsJson.accessibleTests : []
-            });
-          } else {
-            setPurchaseData({ loading: false, purchasedPlans: [], accessibleTests: [] });
-          }
-        } else {
+        if (!accessToken) {
           setPurchaseData({ loading: false, purchasedPlans: [], accessibleTests: [] });
           setUserDashboard({
             performanceSnapshot: { avgScore: null, bestScore: null, accuracy: null },
@@ -118,14 +61,121 @@ const Dashboard = () => {
             quizAttempts: { attempted: 0, total: 0, attemptPercentage: 0 },
             recentQuizActivity: []
           });
+          return;
+        }
+
+        const profileRequest = fetchWithErrorHandling(buildApiUrl('/api/user/profile'), {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        const dashboardRequest = fetchWithErrorHandling(buildApiUrl('/api/user/dashboard'), {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        const testsRequest = fetchWithErrorHandling(buildApiUrl('/api/user/tests'), {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        fastLoadTimerId = setTimeout(() => {
+          if (!isActive) return;
+          setPurchaseData((current) => ({
+            loading: false,
+            purchasedPlans: current.purchasedPlans || [],
+            accessibleTests: current.accessibleTests || []
+          }));
+        }, 1200);
+
+        const [profileRes, dashboardRes, testsRes] = await Promise.all([
+          profileRequest,
+          dashboardRequest,
+          testsRequest
+        ]);
+
+        if (profileRes?.ok) {
+          const profileData = await profileRes.json();
+          setUserName((profileData.profile && profileData.profile.firstName) || 'User');
+        }
+
+        if (dashboardRes?.ok) {
+          const dashboardJson = await dashboardRes.json();
+          const mergedActivities = mergeRecentQuizActivity(dashboardJson.recentQuizActivity, localActivities);
+          const fallbackRecent = Array.isArray(dashboardJson.recentQuizActivity)
+            ? dashboardJson.recentQuizActivity
+            : [];
+          const recentActivityList = mergedActivities.length > 0 ? mergedActivities : fallbackRecent;
+          const fallbackAttempts = mergedActivities.length;
+          const quizAttempts = dashboardJson.quizAttempts || {};
+          const attempted = Number(quizAttempts.attempted ?? fallbackAttempts ?? 0);
+          const total = Number(quizAttempts.total ?? attempted ?? 0);
+          const attemptPercentage = Number(
+            quizAttempts.attemptPercentage ?? (total > 0 ? Math.round((attempted / total) * 100) : 0)
+          );
+          setUserDashboard({
+            performanceSnapshot: dashboardJson.performanceSnapshot || { avgScore: null, bestScore: null, accuracy: null },
+            currentStreak: Number(dashboardJson.currentStreak || 0),
+            quizAttempts: {
+              attempted,
+              total,
+              attemptPercentage
+            },
+            recentQuizActivity: recentActivityList
+          });
+        } else if (localActivities.length > 0) {
+          const fallbackAttempts = localActivities.length;
+          setUserDashboard((current) => ({
+            ...current,
+            quizAttempts: {
+              attempted: fallbackAttempts,
+              total: fallbackAttempts,
+              attemptPercentage: fallbackAttempts > 0 ? 100 : 0
+            },
+            recentQuizActivity: localActivities
+          }));
+        }
+
+        if (testsRes?.ok) {
+          const testsJson = await testsRes.json();
+          setPurchaseData({
+            loading: false,
+            purchasedPlans: Array.isArray(testsJson.purchasedPlans) ? testsJson.purchasedPlans : [],
+            accessibleTests: Array.isArray(testsJson.accessibleTests) ? testsJson.accessibleTests : []
+          });
+        } else {
+          setPurchaseData({ loading: false, purchasedPlans: [], accessibleTests: [] });
         }
       } catch (err) {
         console.error('Dashboard load error:', err);
-        setPurchaseData({ loading: false, purchasedPlans: [], accessibleTests: [] });
+      } finally {
+        if (fastLoadTimerId) {
+          clearTimeout(fastLoadTimerId);
+        }
+        if (isActive) {
+          setPurchaseData((current) => ({
+            loading: false,
+            purchasedPlans: current.purchasedPlans || [],
+            accessibleTests: current.accessibleTests || []
+          }));
+        }
       }
     };
 
     loadData();
+
+    return () => {
+      isActive = false;
+    };
   }, []);
 
   const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -164,14 +214,13 @@ const Dashboard = () => {
   };
 
   const unlockedTests = purchaseData.purchasedPlans.length > 0 ? getFilteredTests(purchaseData.accessibleTests).slice(0, 6) : [];
-  const recentActivity = mergeRecentQuizActivity(
-    Array.isArray(userDashboard.recentQuizActivity) ? userDashboard.recentQuizActivity : [],
-    loadRecentQuizActivity()
-  );
+  const recentActivity = Array.isArray(userDashboard.recentQuizActivity)
+    ? userDashboard.recentQuizActivity
+    : [];
   const displayedActivity = showAllActivity ? recentActivity : recentActivity.slice(0, 5);
   const primaryTest = getFilteredTests(purchaseData.accessibleTests)[0] || null;
-  const { liveNow } = getSessionDisplayStats();
-  const liveTestMoreUsers = Math.max(liveNow - liveTestUsers.length, 0);
+  const [liveNowUsers] = useState(() => Math.floor(Math.random() * 701) + 300);
+  const liveTestMoreUsers = Math.max(liveNowUsers - liveTestUsers.length, 0);
   const perfTiles = [
     {
       id: 1,
@@ -235,7 +284,7 @@ const Dashboard = () => {
               <div className="stat-icon live-icon">🟢</div>
               <div className="stat-content">
                 <p className="stat-label">Live Now Users</p>
-                <p className="stat-value">{liveNow}</p>
+                <p className="stat-value">{liveNowUsers}</p>
                 <p className="stat-change">Online & learning</p>
               </div>
             </div>
@@ -415,7 +464,7 @@ const Dashboard = () => {
               <span className="live-badge">● LIVE</span>
             </div>
 
-            <p className="live-description">{liveNow} learners are taking</p>
+            <p className="live-description">{liveNowUsers} learners are taking</p>
             <p className="live-test-title">Free Prelims Test – Polity</p>
 
             <div className="live-users">

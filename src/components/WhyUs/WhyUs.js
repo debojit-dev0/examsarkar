@@ -28,8 +28,8 @@ export default function WhyUs() {
   return (
     <section className="whyus-section">
       <div className="whyus-container">
+        <div className="whyus-eyebrow">Why students choose ExamSarkar</div>
 
-        {/* HEADER (now feels like closing CTA) */}
         <div className="whyus-header">
           <h2>Still Wondering Why Students Choose Us?</h2>
           <p>
@@ -37,18 +37,24 @@ export default function WhyUs() {
           </p>
         </div>
 
-        {/* GRID */}
         <div className="whyus-grid">
           {features.map((item, index) => (
             <div className="whyus-card" key={index}>
-              <div className="whyus-icon">{item.icon}</div>
+              <div className="whyus-icon-wrap">
+                <div className="whyus-icon">{item.icon}</div>
+              </div>
               <h3>{item.title}</h3>
               <p>{item.desc}</p>
             </div>
           ))}
         </div>
 
-        {/* FOOTER NOTE */}
+        <div className="whyus-highlight-row">
+          <div className="whyus-highlight-pill">Built for serious UPSC prep</div>
+          <div className="whyus-highlight-pill">Practice, rank, review, improve</div>
+          <div className="whyus-highlight-pill">Fast, focused, exam-ready</div>
+        </div>
+
         <div className="whyus-footer-note">
           Start your preparation journey today — consistency beats talent.
         </div>
