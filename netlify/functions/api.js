@@ -1007,53 +1007,79 @@ app.get("/api/stats", (req, res) => {
 });
 
 // Create order
-app.post("/api/payment/create-order", verifyToken, async (req, res) => {
-  try {
-    const razorpay = getRazorpayClient();
-    if (!razorpay) {
-      return res.status(503).json({ message: "Payment service is not configured yet." });
+app.post(
+  "/api/payment/create-order",
+  verifyToken,
+  [
+    body("amount").isInt({ min: 1 }),
+    body("planKey").matches(/^(daily|weekly|monthly):(gs|csat|combo|all)$/),
+    body("planName").trim().isLength({ min: 1, max: 100 })
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ message: "Invalid payment data" });
+      }
+
+      const razorpay = getRazorpayClient();
+      if (!razorpay) {
+        return res.status(503).json({ message: "Payment service unavailable" });
+      }
+
+      const { amount, planKey, planName } = req.body;
+      const uid = req.user.uid;
+
+      if (amount < 100 || amount > 500000) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+
+      const purchasePlan = getPurchasePlan({ planKey, planName });
+      const shortUid = uid.replace(/-/g, "").slice(0, 12);
+      const ts = String(Date.now()).slice(-6);
+      const receipt = `rcpt_${shortUid}_${ts}`;
+
+      const order = await razorpay.orders.create({
+        amount,
+        currency: "INR",
+        receipt,
+        payment_capture: 1,
+        notes: {
+          planKey: purchasePlan.planKey,
+          planName: purchasePlan.planName
+        }
+      });
+
+      await database.ref(`payments/${order.id}`).set({
+        uid,
+        orderId: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        receipt: order.receipt,
+        planKey: purchasePlan.planKey,
+        planName: purchasePlan.planName,
+        status: "created",
+        createdAt: new Date().toISOString()
+      });
+
+      await database.ref(`userPayments/${uid}/${order.id}`).set({
+        status: "created",
+        createdAt: new Date().toISOString(),
+        planKey: purchasePlan.planKey,
+        planName: purchasePlan.planName
+      });
+
+      return res.status(201).json({
+        message: "Order created",
+        order,
+        key_id: process.env.RAZORPAY_KEY_ID
+      });
+    } catch (error) {
+      console.error("Create order error:", error.message);
+      return res.status(500).json({ message: "Failed to create payment order" });
     }
-
-    const { amount } = req.body || {};
-    if (!amount || typeof amount !== "number") {
-      return res.status(400).json({ message: "Amount (in paise) is required." });
-    }
-
-    const uid = req.user.uid;
-    const shortUid = uid.replace(/-/g, '').slice(0, 12);
-    const ts = String(Date.now()).slice(-6);
-    const receipt = `rcpt_${shortUid}_${ts}`;
-
-    const order = await razorpay.orders.create({
-      attempts
-        .map((attempt) => String(getAttemptTimestamp(attempt) || "").slice(0, 10))
-        .filter(Boolean)
-    );
-    });
-      const timestamp = getAttemptTimestamp(attempt);
-      return {
-        id: attempt.attemptId || attempt.id,
-        testId: attempt.testId,
-        title: attempt.testName,
-        score: `${Math.round(Number(attempt.score || 0))}%`,
-        accuracy: `${Math.round(Number(attempt.accuracy || 0))}%`,
-        attempted: Number(attempt.attempted || 0),
-        total: Number(attempt.total || 0),
-        submittedAt: timestamp,
-        time: `${Math.max(Number(attempt.attempted || 0), 1)} questions`,
-        date: timestamp
-          ? new Date(timestamp).toLocaleDateString("en-IN", {
-              day: "2-digit",
-              month: "short",
-              year: "numeric"
-            })
-          : ""
-      };
-  } catch (error) {
-    console.error("Create order error:", error);
-    return res.status(500).json({ message: "Failed to create order" });
   }
-});
+);
 
 // Verify payment
 app.post("/api/payment/verify", verifyToken, async (req, res) => {
