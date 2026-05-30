@@ -4,7 +4,7 @@ import { loadAdminTests } from "../../utils/adminTestsStore";
 import { buildApiUrl } from "../../utils/apiBaseUrl";
 import Navbar from "../../components/Navbar/Navbar";
 import "./TestPage.css";
-import { saveRecentQuizActivity } from "../../utils/recentQuizActivityStore";
+import { enqueuePendingAttempt, saveRecentQuizActivity } from "../../utils/recentQuizActivityStore";
 import { fetchWithErrorHandling } from "../../utils/apiErrorHandler";
 
 export default function TestPage({ onLoginClick, onSignupClick }) {
@@ -328,6 +328,33 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
     };
 
     const localSubmittedAt = new Date().toISOString();
+    const attemptPayload = {
+      testId: test.id,
+      testName: test.testName,
+      score,
+      accuracy,
+      correct,
+      total,
+      attempted,
+      notAttempted,
+      reviewCount,
+      answers,
+      markedForReview,
+      questionsSnapshot: Array.isArray(test.parsedQuestions) ? test.parsedQuestions : [],
+      analysis: {
+        correct,
+        incorrect: total - correct,
+        attempted,
+        notAttempted,
+        reviewCount,
+        accuracy,
+      },
+      submittedBy: isAutoSubmit ? "timer" : "manual",
+      timeTakenSeconds,
+      timeLeftSeconds: capturedRemainingSeconds,
+      submittedAt: localSubmittedAt,
+    };
+
     saveRecentQuizActivity({
       id: `${test.id}-${localSubmittedAt}`,
       attemptId: null,
@@ -355,31 +382,7 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
             Authorization: `Bearer ${accessToken}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            testId: test.id,
-            testName: test.testName,
-            score,
-            accuracy,
-            correct,
-            total,
-            attempted,
-            notAttempted,
-            reviewCount,
-            answers,
-            markedForReview,
-            questionsSnapshot: Array.isArray(test.parsedQuestions) ? test.parsedQuestions : [],
-            analysis: {
-              correct,
-              incorrect: total - correct,
-              attempted,
-              notAttempted,
-              reviewCount,
-              accuracy,
-            },
-            submittedBy: isAutoSubmit ? "timer" : "manual",
-            timeTakenSeconds,
-            timeLeftSeconds: capturedRemainingSeconds,
-          }),
+          body: JSON.stringify(attemptPayload),
         });
 
         if (response.ok) {
@@ -403,10 +406,15 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
               })
             });
           }
+        } else {
+          enqueuePendingAttempt(attemptPayload);
         }
       } catch (saveError) {
         console.error("Failed to save test attempt:", saveError);
+        enqueuePendingAttempt(attemptPayload);
       }
+    } else {
+      enqueuePendingAttempt(attemptPayload);
     }
 
     setResults(resultData);

@@ -5,7 +5,7 @@ import { buildApiUrl } from '../../utils/apiBaseUrl';
 import { fetchWithErrorHandling } from '../../utils/apiErrorHandler';
 import Navbar from "../../components/Navbar/Navbar";
 import { useNavigate } from 'react-router-dom';
-import { loadRecentQuizActivity, mergeRecentQuizActivity } from '../../utils/recentQuizActivityStore';
+import { loadPendingAttempts, loadRecentQuizActivity, mergeRecentQuizActivity, setPendingAttempts } from '../../utils/recentQuizActivityStore';
 
 const Dashboard = () => {
   const navigate = useNavigate(); // ✅ REQUIRED
@@ -55,6 +55,36 @@ const Dashboard = () => {
     return streak;
   }, [toLocalDayKey]);
 
+  const syncPendingAttempts = useCallback(async (accessToken) => {
+    if (!accessToken) return;
+
+    const pending = loadPendingAttempts();
+    if (!pending.length) return;
+
+    const remaining = [];
+
+    for (const payload of pending) {
+      try {
+        const response = await fetchWithErrorHandling(buildApiUrl("/api/user/test-attempts"), {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          remaining.push(payload);
+        }
+      } catch (error) {
+        remaining.push(payload);
+      }
+    }
+
+    setPendingAttempts(remaining);
+  }, []);
+
   const liveTestUsers = [
     { name: 'User1', avatar: '👨' },
     { name: 'User2', avatar: '👨' },
@@ -97,6 +127,8 @@ const Dashboard = () => {
           });
           return;
         }
+
+        await syncPendingAttempts(accessToken);
 
         const profileRequest = fetchWithErrorHandling(buildApiUrl('/api/user/profile'), {
           method: 'GET',

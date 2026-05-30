@@ -1,6 +1,7 @@
 const RECENT_ACTIVITY_PREFIX = "examSarkarRecentQuizActivity";
 const GLOBAL_ACTIVITY_KEY = `${RECENT_ACTIVITY_PREFIX}:global`;
 const MEMORY_ACTIVITY_KEY = "__examSarkarRecentQuizActivity";
+const PENDING_ATTEMPTS_KEY = "examSarkarPendingTestAttempts";
 
 const getCurrentActivityKey = () => {
   try {
@@ -141,4 +142,43 @@ export const mergeRecentQuizActivity = (remoteActivities = [], localActivities =
   return Array.from(merged.values())
     .sort((left, right) => new Date(right.submittedAt).getTime() - new Date(left.submittedAt).getTime())
     .slice(0, 20);
+};
+
+const getPendingKey = (payload) => {
+  if (!payload) return null;
+  const submittedAt = payload.submittedAt || payload.timestamp || payload.createdAt || "";
+  return `${payload.testId || "test"}:${submittedAt}`;
+};
+
+const readPendingAttempts = () => {
+  try {
+    const raw = window.localStorage.getItem(PENDING_ATTEMPTS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const persistPendingAttempts = (attempts) => {
+  try {
+    window.localStorage.setItem(PENDING_ATTEMPTS_KEY, JSON.stringify(attempts));
+  } catch {
+    // ignore storage failures
+  }
+};
+
+export const loadPendingAttempts = () => readPendingAttempts();
+
+export const setPendingAttempts = (attempts) => {
+  persistPendingAttempts(Array.isArray(attempts) ? attempts : []);
+};
+
+export const enqueuePendingAttempt = (payload) => {
+  if (!payload) return;
+  const key = getPendingKey(payload);
+  if (!key) return;
+  const existing = readPendingAttempts().filter((item) => getPendingKey(item) !== key);
+  persistPendingAttempts([payload, ...existing].slice(0, 20));
 };

@@ -19,14 +19,21 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
   const getVisibleFreeTests = (tests) => {
     if (!Array.isArray(tests)) return [];
 
-    const today = new Date().toISOString().split("T")[0];
+    const toLocalDayKey = (value) => {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return null;
+      return date.toLocaleDateString("en-CA");
+    };
+
+    const todayKey = toLocalDayKey(new Date());
 
     return tests.filter((test) => {
       if (test?.access !== "free") return false;
 
       if (test?.type === "daily-quiz") {
-        const testDate = test.date ? String(test.date).split("T")[0] : null;
-        return testDate === today;
+        const testDate = test.date || test.createdAt || test.updatedAt;
+        const testKey = toLocalDayKey(testDate);
+        return Boolean(todayKey && testKey && testKey === todayKey);
       }
 
       return true;
