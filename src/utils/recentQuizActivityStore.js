@@ -1,6 +1,5 @@
 const RECENT_ACTIVITY_PREFIX = "examSarkarRecentQuizActivity";
 const GLOBAL_ACTIVITY_KEY = `${RECENT_ACTIVITY_PREFIX}:global`;
-const WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000;
 const MEMORY_ACTIVITY_KEY = "__examSarkarRecentQuizActivity";
 
 const getCurrentActivityKey = () => {

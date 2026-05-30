@@ -126,7 +126,7 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
     };
 
     loadArchivedAttempt();
-  }, [attemptId, test]);
+  }, [attemptId, test, testId]);
 
   const handleAnswerSelect = (questionIndex, optionIndex) => {
     setAnswers((prev) => ({

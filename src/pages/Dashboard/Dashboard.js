@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Search, ChevronRight, Radio } from 'lucide-react';
 import './Dashboard.css';
 import { buildApiUrl } from '../../utils/apiBaseUrl';
@@ -21,13 +21,13 @@ const Dashboard = () => {
 
   const [showAllActivity, setShowAllActivity] = useState(false);
 
-  const toLocalDayKey = (value) => {
+  const toLocalDayKey = useCallback((value) => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return null;
     return date.toLocaleDateString("en-CA");
-  };
+  }, []);
 
-  const computeLocalStreak = (activities) => {
+  const computeLocalStreak = useCallback((activities) => {
     if (!Array.isArray(activities) || activities.length === 0) return 0;
 
     const attemptDays = new Set(
@@ -53,7 +53,7 @@ const Dashboard = () => {
     }
 
     return streak;
-  };
+  }, [toLocalDayKey]);
 
   const liveTestUsers = [
     { name: 'User1', avatar: '👨' },
@@ -218,7 +218,7 @@ const Dashboard = () => {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [computeLocalStreak]);
 
   const getStreakDays = (activities) => {
     const attemptDays = new Set(
