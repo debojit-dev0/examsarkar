@@ -7,11 +7,32 @@ import PlanSection from "../../components/PlanCard/PlanSection";
 import SignupModal from "../../components/Auth/SignupModal";
 import LoginModal from "../../components/Auth/LoginModal";
 import { preloadRazorpayCheckout, startPaymentCheckout } from "../../components/Payment/PaymentModal";
+import { loadAdminTests } from "../../utils/adminTestsStore";
 
 export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
   const navigate = useNavigate();
   const [authMode, setAuthMode] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(null); // Store which plan user selected
+  const [freeTests, setFreeTests] = useState([]);
+  const [loadingTests, setLoadingTests] = useState(true);
+
+  const getVisibleFreeTests = (tests) => {
+    if (!Array.isArray(tests)) return [];
+
+    const today = new Date().toISOString().split("T")[0];
+
+    return tests.filter((test) => {
+      if (test?.access !== "free") return false;
+
+      if (test?.type === "daily-quiz") {
+        const testDate = test.date ? String(test.date).split("T")[0] : null;
+        return testDate === today;
+      }
+
+      return true;
+    });
+  };
+
   useEffect(() => {
     const handler = (e) => {
       const mode = e?.detail?.mode;
@@ -40,6 +61,34 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
 
     window.addEventListener('openPaymentModal', handler);
     return () => window.removeEventListener('openPaymentModal', handler);
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadFreeTests = async () => {
+      try {
+        setLoadingTests(true);
+        const tests = await loadAdminTests();
+        if (!isActive) return;
+        setFreeTests(getVisibleFreeTests(tests));
+      } catch (error) {
+        console.error("Failed to load free tests:", error);
+        if (isActive) {
+          setFreeTests([]);
+        }
+      } finally {
+        if (isActive) {
+          setLoadingTests(false);
+        }
+      }
+    };
+
+    loadFreeTests();
+
+    return () => {
+      isActive = false;
+    };
   }, []);
 
   const slides = [
@@ -129,11 +178,48 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
           </p>
 
           <section className="free-tests-section">
-            <div className="free-tests-empty">
-              <div className="free-tests-empty-badge">NOT FOUND</div>
-              <h2>Free tests not found</h2>
-              <p>There are no uploaded free tests to show here right now.</p>
+            <div className="free-tests-header">
+              <h2>Free Tests</h2>
+              <p>Open any free test uploaded from the admin panel.</p>
             </div>
+
+            {loadingTests ? (
+              <div className="free-tests-empty">
+                <div className="free-tests-empty-badge">LOADING</div>
+                <h2>Loading free tests</h2>
+                <p>Please wait while we fetch the latest uploaded tests.</p>
+              </div>
+            ) : freeTests.length > 0 ? (
+              <div className="free-tests-grid">
+                {freeTests.map((test) => (
+                  <article className="free-test-card" key={test.id}>
+                    <div className="free-test-topline">
+                      <span className="free-badge">FREE</span>
+                      <span className="free-test-type">{String(test.type || "test").replace(/-/g, " ").toUpperCase()}</span>
+                    </div>
+                    <h3>{test.testName || test.title || "Untitled Test"}</h3>
+                    <p>{test.subject || test.planTag || "Uploaded free test"}</p>
+                    <div className="free-test-meta">
+                      <span>{test.questionCount || test.parsedQuestions?.length || 0} questions</span>
+                      {test.date ? <span>{String(test.date).split("T")[0]}</span> : null}
+                    </div>
+                    <button
+                      type="button"
+                      className="attempt-quiz-btn"
+                      onClick={() => navigate(`/test/${test.id}`)}
+                    >
+                      Start Test
+                    </button>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="free-tests-empty">
+                <div className="free-tests-empty-badge">NOT FOUND</div>
+                <h2>Free tests not found</h2>
+                <p>There are no uploaded free tests to show here right now.</p>
+              </div>
+            )}
           </section>
 
           {/* PLANS */}

@@ -13,6 +13,7 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
   const location = useLocation();
   const attemptId = new URLSearchParams(location.search).get("attemptId");
   const [test, setTest] = useState(null);
+  const [archivedAttempt, setArchivedAttempt] = useState(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState({});
   const [markedForReview, setMarkedForReview] = useState({});
@@ -35,14 +36,15 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
         const tests = await loadAdminTests();
         const foundTest = tests.find((t) => String(t.id) === String(testId));
 
-        if (!foundTest) {
-          setError("Test not found");
+        if (foundTest) {
+          setTest(foundTest);
+          setError(null);
+          setVisitedQuestions({ 0: true });
           setLoading(false);
           return;
         }
 
-        setTest(foundTest);
-        setVisitedQuestions({ 0: true });
+        setError("Test not found");
         setLoading(false);
       } catch (err) {
         console.error("Failed to load test:", err);
@@ -53,6 +55,78 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
 
     fetchTest();
   }, [testId]);
+
+  useEffect(() => {
+    if (!attemptId) return;
+
+    const loadArchivedAttempt = async () => {
+      const accessToken = localStorage.getItem("accessToken") || localStorage.getItem("token");
+      if (!accessToken) return;
+
+      try {
+        setLoadingAttempt(true);
+        const res = await fetch(buildApiUrl(`/api/user/test-attempts/${encodeURIComponent(attemptId)}`), {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!res.ok) {
+          return;
+        }
+
+        const data = await res.json();
+        const attempt = data?.attempt;
+        if (!attempt) {
+          return;
+        }
+
+        setArchivedAttempt(attempt);
+
+        if (!test && Array.isArray(attempt.questionsSnapshot) && attempt.questionsSnapshot.length > 0) {
+          setTest({
+            id: attempt.testId || testId,
+            testName: attempt.testName || "Archived Test",
+            parsedQuestions: attempt.questionsSnapshot,
+            config: attempt.config || {}
+          });
+          setVisitedQuestions({ 0: true });
+          setLoading(false);
+          return;
+        }
+
+        if (!test) {
+          setAnswers(attempt.answers && typeof attempt.answers === "object" ? attempt.answers : {});
+          setMarkedForReview(attempt.markedForReview && typeof attempt.markedForReview === "object" ? attempt.markedForReview : {});
+          setResults({
+            score: Number(attempt.score || 0),
+            accuracy: Number(attempt.accuracy || 0),
+            correct: Number(attempt.correct || 0),
+            total: Number(attempt.total || 0),
+            attempted: Number(attempt.attempted || 0),
+            notAttempted: Number(attempt.notAttempted || 0),
+            reviewCount: Number(attempt.reviewCount || 0),
+            answers: attempt.answers && typeof attempt.answers === "object" ? attempt.answers : {},
+            markedForReview: attempt.markedForReview && typeof attempt.markedForReview === "object" ? attempt.markedForReview : {},
+            testName: attempt.testName || "Archived Test",
+            timestamp: attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleString() : new Date().toLocaleString(),
+          });
+          setSubmitted(true);
+          setReviewMode(false);
+          setRemainingSeconds(null);
+          submitLockRef.current = true;
+        }
+      } catch (savedAttemptError) {
+        console.error("Archived attempt load error:", savedAttemptError);
+      } finally {
+        setLoadingAttempt(false);
+      }
+    };
+
+    loadArchivedAttempt();
+  }, [attemptId, test]);
 
   const handleAnswerSelect = (questionIndex, optionIndex) => {
     setAnswers((prev) => ({
@@ -293,6 +367,7 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
             reviewCount,
             answers,
             markedForReview,
+            questionsSnapshot: Array.isArray(test.parsedQuestions) ? test.parsedQuestions : [],
             analysis: {
               correct,
               incorrect: total - correct,
@@ -420,6 +495,72 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
           <div className="test-loading">
             <div className="spinner"></div>
             <p>Loading test...</p>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (!test && archivedAttempt) {
+    const archivedResults = results || {
+      score: Number(archivedAttempt.score || 0),
+      accuracy: Number(archivedAttempt.accuracy || 0),
+      correct: Number(archivedAttempt.correct || 0),
+      total: Number(archivedAttempt.total || 0),
+      attempted: Number(archivedAttempt.attempted || 0),
+      notAttempted: Number(archivedAttempt.notAttempted || 0),
+      reviewCount: Number(archivedAttempt.reviewCount || 0),
+      testName: archivedAttempt.testName || "Archived Test",
+      timestamp: archivedAttempt.submittedAt ? new Date(archivedAttempt.submittedAt).toLocaleString() : new Date().toLocaleString(),
+    };
+
+    return (
+      <>
+        <Navbar
+          onHomeClick={() => navigate("/")}
+          onPlansClick={() => navigate("/test-series")}
+          onLoginClick={onLoginClick}
+          onSignupClick={onSignupClick}
+        />
+        <div className="test-page archived-review-page">
+          <div className="archived-review-card">
+            <p className="archived-review-eyebrow">Review archived attempt</p>
+            <h1>{archivedResults.testName}</h1>
+            <p className="archived-review-note">
+              The original test is no longer available in the current catalog, but your submitted attempt is still saved and can be reviewed here.
+            </p>
+
+            <div className="archived-review-grid">
+              <div className="archived-review-stat">
+                <span>Score</span>
+                <strong>{archivedResults.score}%</strong>
+              </div>
+              <div className="archived-review-stat">
+                <span>Accuracy</span>
+                <strong>{archivedResults.accuracy}%</strong>
+              </div>
+              <div className="archived-review-stat">
+                <span>Correct</span>
+                <strong>{archivedResults.correct}</strong>
+              </div>
+              <div className="archived-review-stat">
+                <span>Attempted</span>
+                <strong>{archivedResults.attempted}</strong>
+              </div>
+              <div className="archived-review-stat">
+                <span>Not Attempted</span>
+                <strong>{archivedResults.notAttempted}</strong>
+              </div>
+              <div className="archived-review-stat">
+                <span>Marked for Review</span>
+                <strong>{archivedResults.reviewCount}</strong>
+              </div>
+            </div>
+
+            <div className="archived-review-actions">
+              <button className="review-btn" onClick={() => navigate("/dashboard")}>Back to Dashboard</button>
+              <button className="back-btn" onClick={() => navigate("/test-series")}>Back to Tests</button>
+            </div>
           </div>
         </div>
       </>

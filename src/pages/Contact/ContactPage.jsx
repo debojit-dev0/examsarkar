@@ -45,7 +45,7 @@ const ContactPage = ({ onLoginClick, onSignupClick, onHomeClick, onPlansClick })
               <Mail size={32} />
             </div>
             <h3>Email</h3>
-            <p className="contact-value">helloexamsarkar@gmail.com</p>
+            <p className="contact-value contact-value-email">helloexamsarkar@gmail.com</p>
             <a href="mailto:helloexamsarkar@gmail.com" className="contact-link">
               Send Email
             </a>

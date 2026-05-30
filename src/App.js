@@ -132,6 +132,7 @@ function AppContent() {
 
   return (
     <Suspense fallback={<div className="app-shell-loading">Loading...</div>}>
+    <>
     <Routes>
 
       {/* ================= HOME PAGE ================= */}
@@ -185,26 +186,6 @@ function AppContent() {
               <Footer />
             </DeferredSection>
 
-            {/* AUTH MODALS */}
-            {authMode === "signup" && (
-              <Suspense fallback={null}>
-                <SignupModal
-                  isOpen={authMode === "signup"}
-                  onClose={() => setAuthMode(null)}
-                  switchToLogin={() => setAuthMode("login")}
-                />
-              </Suspense>
-            )}
-
-            {authMode === "login" && (
-              <Suspense fallback={null}>
-                <LoginModal
-                  isOpen={authMode === "login"}
-                  onClose={() => setAuthMode(null)}
-                  switchToSignup={() => setAuthMode("signup")}
-                />
-              </Suspense>
-            )}
           </>
         }
       />
@@ -221,6 +202,28 @@ function AppContent() {
       <Route path="/contact" element={<ContactPage onLoginClick={handleLoginClick} onSignupClick={() => setAuthMode("signup")} onHomeClick={scrollToHero} onPlansClick={() => navigate("/test-series")} />} />
 
     </Routes>
+    
+    {/* AUTH MODALS (GLOBAL) */}
+    {authMode === "signup" && (
+      <Suspense fallback={null}>
+        <SignupModal
+          isOpen={authMode === "signup"}
+          onClose={() => setAuthMode(null)}
+          switchToLogin={() => setAuthMode("login")}
+        />
+      </Suspense>
+    )}
+
+    {authMode === "login" && (
+      <Suspense fallback={null}>
+        <LoginModal
+          isOpen={authMode === "login"}
+          onClose={() => setAuthMode(null)}
+          switchToSignup={() => setAuthMode("signup")}
+        />
+      </Suspense>
+    )}
+    </>
     </Suspense>
   );
 }

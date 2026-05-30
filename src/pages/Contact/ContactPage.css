@@ -7,7 +7,7 @@
 }
 
 .contact-container {
-  max-width: 1180px;
+  max-width: 1240px;
   margin: 0 auto;
   padding: 56px 20px 64px;
 }
@@ -92,7 +92,7 @@
 .contact-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 20px;
+  gap: 16px;
   margin-bottom: 56px;
   align-items: start;
 }
@@ -108,7 +108,8 @@
   border: 1px solid rgba(148, 163, 184, 0.18);
   display: flex;
   flex-direction: column;
-  min-height: unset;
+  min-height: 0;
+  height: auto;
 }
 
 .contact-card:hover {
@@ -161,8 +162,14 @@
   color: #6b7280;
   font-weight: 500;
   margin: 0 0 20px 0;
-  word-break: break-all;
   line-height: 1.55;
+}
+
+.contact-value-email {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .contact-link {
@@ -171,6 +178,7 @@
   justify-content: center;
   width: fit-content;
   padding: 11px 18px;
+  margin-top: 8px;
   background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
   color: white;
   text-decoration: none;

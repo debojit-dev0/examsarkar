@@ -140,9 +140,6 @@ export default function Navbar({
           Test Series
         </button>
 
-        <button type="button" className="nav-link" onClick={() => navigate("/contact")}>
-          Contact
-        </button>
 
         {/* ✅ Show Quiz only after login */}
         {user && (

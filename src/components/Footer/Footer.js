@@ -4,6 +4,10 @@ import { FaFacebookF, FaInstagram, FaTwitter, FaLinkedin, FaArrowRight } from "r
 
 export default function Footer() {
   const navigate = useNavigate();
+  const handleNavigate = (path) => {
+    navigate(path);
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  };
 
   return (
     <footer className="footer-section">
@@ -44,17 +48,17 @@ export default function Footer() {
               </button>
             </li>
             <li>
-              <button type="button" onClick={() => navigate("/test-series")}> 
+              <button type="button" onClick={() => handleNavigate("/test-series")}> 
                 <FaArrowRight /> Tests
               </button>
             </li>
             <li>
-              <button type="button" onClick={() => navigate("/dashboard")}> 
+              <button type="button" onClick={() => handleNavigate("/dashboard")}> 
                 <FaArrowRight /> Dashboard
               </button>
             </li>
             <li>
-              <button type="button" onClick={() => navigate("/dashboard")}> 
+              <button type="button" onClick={() => handleNavigate("/dashboard")}> 
                 <FaArrowRight /> Results
               </button>
             </li>
@@ -69,7 +73,7 @@ export default function Footer() {
             <li><FaArrowRight /> Privacy Policy</li>
             <li><FaArrowRight /> Terms</li>
             <li>
-              <button type="button" onClick={() => navigate("/contact")}> 
+              <button type="button" onClick={() => handleNavigate("/contact")}> 
                 <FaArrowRight /> Contact
               </button>
             </li>

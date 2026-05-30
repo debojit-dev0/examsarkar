@@ -753,7 +753,8 @@ app.post(
     body("reviewCount").isInt({ min: 0 }),
     body("analysis").optional().isObject(),
     body("answers").optional().isObject(),
-    body("markedForReview").optional().isObject()
+    body("markedForReview").optional().isObject(),
+    body("questionsSnapshot").optional().isArray()
   ],
   async (req, res) => {
     try {
@@ -775,7 +776,8 @@ app.post(
         reviewCount,
         analysis,
         answers,
-        markedForReview
+        markedForReview,
+        questionsSnapshot
       } = req.body;
 
       const submittedAt = new Date().toISOString();
@@ -804,6 +806,7 @@ app.post(
         },
         answers: answers && typeof answers === "object" ? answers : {},
         markedForReview: markedForReview && typeof markedForReview === "object" ? markedForReview : {},
+        questionsSnapshot: Array.isArray(questionsSnapshot) ? questionsSnapshot : [],
         submittedAt,
         createdAt: submittedAt
       };
@@ -845,6 +848,41 @@ app.get(
     } catch (error) {
       console.error("Load test attempt error:", error);
       return res.status(500).json({ message: "Failed to load test attempt" });
+    }
+  }
+);
+
+app.get(
+  "/api/user/test-attempts/:attemptId/test",
+  verifyToken,
+  [param("attemptId").trim().isLength({ min: 1, max: 120 })],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ message: "Invalid attempt id" });
+      }
+
+      const { uid } = req.user;
+      const { attemptId } = req.params;
+
+      const attemptSnapshot = await database.ref(`${USER_TEST_ATTEMPTS_PATH}/${uid}/${attemptId}`).get();
+      if (!attemptSnapshot.exists()) {
+        return res.status(404).json({ message: "Attempt not found" });
+      }
+
+      const attempt = attemptSnapshot.val();
+      const testsSnapshot = await database.ref(ADMIN_TESTS_PATH).get();
+      const test = normalizeList(testsSnapshot.val()).find((item) => String(item.id) === String(attempt?.testId));
+
+      if (!test) {
+        return res.status(404).json({ message: "Test not found" });
+      }
+
+      return res.status(200).json({ test, attempt });
+    } catch (error) {
+      console.error("Load attempt test error:", error.message);
+      return res.status(500).json({ message: "Failed to load test for review" });
     }
   }
 );

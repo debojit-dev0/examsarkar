@@ -19,17 +19,17 @@ const getTimestamp = (value) => {
   return Number.isFinite(timestamp) ? timestamp : null;
 };
 
-const isWithinWeek = (submittedAt) => {
-  const timestamp = getTimestamp(submittedAt);
-  if (timestamp === null) return false;
-  return Date.now() - timestamp <= WEEK_IN_MS;
+const getActivityKey = (item) => {
+  if (!item) return null;
+  const submittedAt = item.submittedAt || item.timestamp || item.createdAt || "";
+  return String(item.attemptId || item.id || `${item.testId || "test"}:${submittedAt}`);
 };
 
 const normalizeActivity = (item) => {
   if (!item) return null;
 
   const submittedAt = item.submittedAt || item.timestamp || item.createdAt;
-  if (!isWithinWeek(submittedAt)) return null;
+  if (!getTimestamp(submittedAt)) return null;
 
   return {
     id: String(item.id || item.attemptId || submittedAt),
@@ -78,9 +78,18 @@ const readStoredActivities = () => {
       }
     });
 
-    const filtered = parsed
+    const merged = new Map();
+
+    parsed
       .map(normalizeActivity)
       .filter(Boolean)
+      .forEach((item) => {
+        const key = getActivityKey(item);
+        if (!key) return;
+        merged.set(key, item);
+      });
+
+    const filtered = Array.from(merged.values())
       .sort((left, right) => new Date(right.submittedAt).getTime() - new Date(left.submittedAt).getTime())
       .slice(0, 20);
 
@@ -108,7 +117,8 @@ export const saveRecentQuizActivity = (activity) => {
   const nextActivity = normalizeActivity(activity);
   if (!nextActivity) return [];
 
-  const existing = readStoredActivities().filter((item) => item.id !== nextActivity.id);
+  const nextKey = getActivityKey(nextActivity);
+  const existing = readStoredActivities().filter((item) => getActivityKey(item) !== nextKey);
   const updated = [nextActivity, ...existing]
     .sort((left, right) => new Date(right.submittedAt).getTime() - new Date(left.submittedAt).getTime())
     .slice(0, 20);
@@ -124,7 +134,7 @@ export const mergeRecentQuizActivity = (remoteActivities = [], localActivities =
     .map(normalizeActivity)
     .filter(Boolean)
     .forEach((item) => {
-      const key = item.attemptId || item.id;
+      const key = getActivityKey(item);
       if (!key) return;
       merged.set(key, item);
     });

@@ -21,6 +21,40 @@ const Dashboard = () => {
 
   const [showAllActivity, setShowAllActivity] = useState(false);
 
+  const toLocalDayKey = (value) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleDateString("en-CA");
+  };
+
+  const computeLocalStreak = (activities) => {
+    if (!Array.isArray(activities) || activities.length === 0) return 0;
+
+    const attemptDays = new Set(
+      activities
+        .map((activity) => toLocalDayKey(activity.submittedAt || activity.timestamp || activity.createdAt))
+        .filter(Boolean)
+    );
+
+    const sortedDays = Array.from(attemptDays).sort().reverse();
+    const latestDay = sortedDays[0];
+    if (!latestDay) return 0;
+
+    const parseDayKey = (dayKey) => new Date(`${dayKey}T00:00:00`);
+    const cursor = parseDayKey(latestDay);
+    if (Number.isNaN(cursor.getTime())) return 0;
+
+    let streak = 0;
+    while (true) {
+      const dayKey = toLocalDayKey(cursor);
+      if (!dayKey || !attemptDays.has(dayKey)) break;
+      streak += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+
+    return streak;
+  };
+
   const liveTestUsers = [
     { name: 'User1', avatar: '👨' },
     { name: 'User2', avatar: '👨' },
@@ -110,21 +144,29 @@ const Dashboard = () => {
 
         if (dashboardRes?.ok) {
           const dashboardJson = await dashboardRes.json();
-          const mergedActivities = mergeRecentQuizActivity(dashboardJson.recentQuizActivity, localActivities);
+          const latestLocalActivities = loadRecentQuizActivity();
+          const mergedActivities = mergeRecentQuizActivity(dashboardJson.recentQuizActivity, latestLocalActivities);
           const fallbackRecent = Array.isArray(dashboardJson.recentQuizActivity)
             ? dashboardJson.recentQuizActivity
             : [];
           const recentActivityList = mergedActivities.length > 0 ? mergedActivities : fallbackRecent;
           const fallbackAttempts = mergedActivities.length;
           const quizAttempts = dashboardJson.quizAttempts || {};
-          const attempted = Number(quizAttempts.attempted ?? fallbackAttempts ?? 0);
+          const mergedAttemptCount = Array.isArray(mergedActivities) ? mergedActivities.length : 0;
+          const attempted = Math.max(
+            Number(quizAttempts.attempted ?? 0),
+            Number(fallbackAttempts ?? 0),
+            mergedAttemptCount
+          );
           const total = Number(quizAttempts.total ?? attempted ?? 0);
           const attemptPercentage = Number(
             quizAttempts.attemptPercentage ?? (total > 0 ? Math.round((attempted / total) * 100) : 0)
           );
+          const localStreak = computeLocalStreak(recentActivityList);
+          const resolvedStreak = Math.max(Number(dashboardJson.currentStreak || 0), localStreak);
           setUserDashboard({
             performanceSnapshot: dashboardJson.performanceSnapshot || { avgScore: null, bestScore: null, accuracy: null },
-            currentStreak: Number(dashboardJson.currentStreak || 0),
+            currentStreak: resolvedStreak,
             quizAttempts: {
               attempted,
               total,
@@ -178,11 +220,30 @@ const Dashboard = () => {
     };
   }, []);
 
-  const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const streakDays = weekDays.map((day, idx) => ({
-    day,
-    completed: idx < Math.min(userDashboard.currentStreak, weekDays.length)
-  }));
+  const getStreakDays = (activities) => {
+    const attemptDays = new Set(
+      (Array.isArray(activities) ? activities : [])
+        .map((activity) => toLocalDayKey(activity.submittedAt || activity.timestamp || activity.createdAt))
+        .filter(Boolean)
+    );
+
+    const today = new Date();
+    const dayIndex = (today.getDay() + 6) % 7; // Monday=0
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - dayIndex);
+
+    return Array.from({ length: 7 }, (_, idx) => {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + idx);
+      const dayKey = toLocalDayKey(date);
+      return {
+        day: date.toLocaleDateString("en-US", { weekday: "short" }),
+        completed: dayKey ? attemptDays.has(dayKey) : false
+      };
+    });
+  };
+
+  const streakDays = getStreakDays(userDashboard.recentQuizActivity);
 
   const seriesTheme = {
     gs: { bgColor: '#E8F0FE', icon: '📋', color: '#5B6BFF', label: 'GS / GE' },
@@ -221,23 +282,6 @@ const Dashboard = () => {
   const primaryTest = getFilteredTests(purchaseData.accessibleTests)[0] || null;
   const [liveNowUsers] = useState(() => Math.floor(Math.random() * 701) + 300);
   const liveTestMoreUsers = Math.max(liveNowUsers - liveTestUsers.length, 0);
-  const perfTiles = [
-    {
-      id: 1,
-      label: 'Avg. Score',
-      value: userDashboard.performanceSnapshot.avgScore !== null ? `${userDashboard.performanceSnapshot.avgScore}%` : '--'
-    },
-    {
-      id: 2,
-      label: 'Best Score',
-      value: userDashboard.performanceSnapshot.bestScore !== null ? `${userDashboard.performanceSnapshot.bestScore}%` : '--'
-    },
-    {
-      id: 3,
-      label: 'Accuracy',
-      value: userDashboard.performanceSnapshot.accuracy !== null ? `${userDashboard.performanceSnapshot.accuracy}%` : '--'
-    }
-  ];
    
 
   const handleNavigateToTest = () => {
@@ -425,35 +469,6 @@ const Dashboard = () => {
 
         {/* Right Section */}
         <div className="dashboard-right">
-          {/* Performance Snapshot */}
-          <div className="performance-card">
-            <div className="card-header">
-              <h3 className="card-title">Your Performance Snapshot</h3>
-              <div className="card-icon">📊</div>
-            </div>
-
-            <div className="performance-tiles">
-              {perfTiles.map((t) => (
-                <div key={t.id} className="perf-tile">
-                  <p className="tile-label">{t.label}</p>
-                  <p className="tile-value">{t.value}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="performance-chart">
-              <svg viewBox="0 0 100 60" className="chart-svg">
-                <rect x="10" y="40" width="8" height="20" fill="#D1D5DB" />
-                <rect x="22" y="30" width="8" height="30" fill="#D1D5DB" />
-                <rect x="34" y="20" width="8" height="40" fill="#6366F1" />
-                <rect x="46" y="25" width="8" height="35" fill="#D1D5DB" />
-                <text x="50" y="58" fontSize="8" fill="#999">Chart</text>
-              </svg>
-            </div>
-
-            <p className="performance-text">Attempt tests to see your performance insights.</p>
-          </div>
-
           {/* Live Test Now */}
           <div className="live-test-card">
             <div className="card-header">
