@@ -250,7 +250,7 @@ const Dashboard = () => {
     return () => {
       isActive = false;
     };
-  }, [computeLocalStreak]);
+  }, [computeLocalStreak, syncPendingAttempts]);
 
   const getStreakDays = (activities) => {
     const attemptDays = new Set(
