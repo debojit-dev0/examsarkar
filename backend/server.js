@@ -1172,22 +1172,40 @@ app.post('/api/payment/webhook', (req, res) => {
       const payload = event.payload?.payment?.entity;
       const orderId = payload?.order_id;
       const paymentId = payload?.id;
+      const paidAt = new Date().toISOString();
 
       if (orderId) {
         database.ref(`payments/${orderId}`).update({
           status: 'paid',
           paymentId,
-          paidAt: new Date().toISOString()
+          paidAt
         }).catch(err => console.error('Webhook DB update error:', err));
 
         database.ref(`payments/${orderId}`).get().then(p => {
-          const uid = p.val()?.uid;
+          const record = p.val() || {};
+          const uid = record?.uid;
+          const planKey = record?.planKey;
+          const planName = record?.planName;
+
           if (uid) {
             database.ref(`userPayments/${uid}/${orderId}`).update({
               status: 'paid',
               paymentId,
-              paidAt: new Date().toISOString()
+              paidAt,
+              planKey,
+              planName
             }).catch(err => console.error('Webhook user payment update error:', err));
+
+            if (planKey) {
+              database.ref(`${USER_PURCHASES_PATH}/${uid}/${orderId}`).update({
+                orderId,
+                paymentId,
+                paidAt,
+                planKey,
+                planName,
+                status: 'paid'
+              }).catch(err => console.error('Webhook purchase update error:', err));
+            }
           }
         });
       }

@@ -1136,12 +1136,33 @@ app.post("/api/payment/verify", verifyToken, async (req, res) => {
     }
 
     const paymentRef = database.ref(`payments/${razorpay_order_id}`);
-    await paymentRef.update({ status: "paid", paymentId: razorpay_payment_id, paidAt: new Date().toISOString() });
+    const paidAt = new Date().toISOString();
+    await paymentRef.update({ status: "paid", paymentId: razorpay_payment_id, paidAt });
 
     const p = await paymentRef.get();
-    const uid = p.val()?.uid;
+    const record = p.val() || {};
+    const uid = record?.uid;
+    const planKey = record?.planKey;
+    const planName = record?.planName;
     if (uid) {
-      await database.ref(`userPayments/${uid}/${razorpay_order_id}`).update({ status: "paid", paymentId: razorpay_payment_id, paidAt: new Date().toISOString() });
+      await database.ref(`userPayments/${uid}/${razorpay_order_id}`).update({
+        status: "paid",
+        paymentId: razorpay_payment_id,
+        paidAt,
+        planKey,
+        planName
+      });
+
+      if (planKey) {
+        await database.ref(`${USER_PURCHASES_PATH}/${uid}/${razorpay_order_id}`).set({
+          orderId: razorpay_order_id,
+          paymentId: razorpay_payment_id,
+          paidAt,
+          planKey,
+          planName,
+          status: "paid"
+        });
+      }
     }
 
     return res.status(200).json({ success: true });
@@ -1190,11 +1211,27 @@ app.post('/api/payment/webhook', async (req, res) => {
       const payload = event.payload?.payment?.entity;
       const orderId = payload?.order_id;
       const paymentId = payload?.id;
+      const paidAt = new Date().toISOString();
       if (orderId) {
-        await database.ref(`payments/${orderId}`).update({ status: 'paid', paymentId, paidAt: new Date().toISOString() });
+        await database.ref(`payments/${orderId}`).update({ status: 'paid', paymentId, paidAt });
         const p = await database.ref(`payments/${orderId}`).get();
-        const uid = p.val()?.uid;
-        if (uid) await database.ref(`userPayments/${uid}/${orderId}`).update({ status: 'paid', paymentId, paidAt: new Date().toISOString() });
+        const record = p.val() || {};
+        const uid = record?.uid;
+        const planKey = record?.planKey;
+        const planName = record?.planName;
+        if (uid) {
+          await database.ref(`userPayments/${uid}/${orderId}`).update({ status: 'paid', paymentId, paidAt, planKey, planName });
+          if (planKey) {
+            await database.ref(`${USER_PURCHASES_PATH}/${uid}/${orderId}`).update({
+              orderId,
+              paymentId,
+              paidAt,
+              planKey,
+              planName,
+              status: 'paid'
+            });
+          }
+        }
       }
     }
 
