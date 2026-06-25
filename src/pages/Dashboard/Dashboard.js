@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, ChevronRight, Radio } from 'lucide-react';
+import { ChevronRight, Radio } from 'lucide-react';
 import './Dashboard.css';
 import { buildApiUrl } from '../../utils/apiBaseUrl';
 import { fetchWithErrorHandling } from '../../utils/apiErrorHandler';
@@ -17,7 +17,6 @@ const Dashboard = () => {
   });
   const navigate = useNavigate(); // ✅ REQUIRED
   const [userName, setUserName] = useState('User');
-  const [searchQuery, setSearchQuery] = useState('');
   const [purchaseData, setPurchaseData] = useState({ loading: true, purchasedPlans: [], accessibleTests: [] });
   const [userDashboard, setUserDashboard] = useState({
     performanceSnapshot: { avgScore: null, bestScore: null, accuracy: null },

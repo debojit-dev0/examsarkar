@@ -1,6 +1,6 @@
 import "./MainsTestSeriesPage.css";
 import { useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import Navbar from "../../components/Navbar/Navbar";
 import { useSEO } from "../../hooks/useSEO";

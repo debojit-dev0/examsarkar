@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Mail, Phone, MessageSquare } from 'lucide-react';
 import { FaInstagram, FaFacebook } from 'react-icons/fa';
 import Navbar from '../../components/Navbar/Navbar';
