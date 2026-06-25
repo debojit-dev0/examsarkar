@@ -222,7 +222,7 @@ function AppContent() {
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/payment" element={<PaymentPage />} />
       <Route path="/admin" element={<AdminAuthPage />} />
-      <Route path="/contact" element={<ContactPage onLoginClick={handleLoginClick} onSignupClick={() => setAuthMode("signup")} onHomeClick={scrollToHero} onPlansClick={() => navigate("/test-series")} />} />
+      <Route path="/contact" element={<ContactPage onLoginClick={handleLoginClick} onSignupClick={() => setAuthMode("signup")} onHomeClick={() => navigate("/")} onPlansClick={() => navigate("/test-series")} />} />
 
     </Routes>
     

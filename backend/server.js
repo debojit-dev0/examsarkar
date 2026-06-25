@@ -299,14 +299,32 @@ const getAllowedSubjects = (planSubject) => {
   return [planSubject, "all"];
 };
 
+const PLAN_DURATION_DAYS = { daily: 1, weekly: 7, monthly: 30 };
+
 const getPurchasePlan = (purchase) => {
   const fromKey = parsePlanKey(purchase?.planKey);
+  const planPeriod = fromKey.planPeriod;
+  const days = PLAN_DURATION_DAYS[planPeriod] ?? 1;
+  const paidAt = purchase?.paidAt || null;
+  const expiresAt = paidAt
+    ? new Date(new Date(paidAt).getTime() + days * 24 * 60 * 60 * 1000).toISOString()
+    : null;
   return {
-    planPeriod: fromKey.planPeriod,
+    planPeriod,
     planSubject: fromKey.planSubject,
-    planKey: buildPlanKey(fromKey.planPeriod, fromKey.planSubject),
-    planName: purchase?.planName || `${fromKey.planPeriod[0].toUpperCase()}${fromKey.planPeriod.slice(1)} ${fromKey.planSubject.toUpperCase()}`
+    planKey: buildPlanKey(planPeriod, fromKey.planSubject),
+    planName: purchase?.planName || `${planPeriod[0].toUpperCase()}${planPeriod.slice(1)} ${fromKey.planSubject.toUpperCase()}`,
+    paidAt,
+    expiresAt,
   };
+};
+
+const isPurchaseActive = (purchase) => {
+  if (!purchase.paidAt) return false;
+  const { planPeriod } = parsePlanKey(purchase.planKey);
+  const days = PLAN_DURATION_DAYS[planPeriod] ?? 1;
+  const expiresAt = new Date(new Date(purchase.paidAt).getTime() + days * 24 * 60 * 60 * 1000);
+  return new Date() < expiresAt;
 };
 
 const ADMIN_ACCOUNTS_PATH = "adminAccounts";
@@ -1207,7 +1225,7 @@ app.post('/api/payment/webhook', (req, res) => {
               }).catch(err => console.error('Webhook purchase update error:', err));
             }
           }
-        });
+        }).catch(err => console.error('Webhook get payment record error:', err));
       }
     }
 
@@ -1240,7 +1258,9 @@ app.get("/api/user/tests", verifyToken, async (req, res) => {
     ]);
 
     const tests = normalizeList(testsSnapshot.val());
-    const purchases = normalizeList(purchasesSnapshot.val()).filter((purchase) => purchase.status === "paid");
+    const purchases = normalizeList(purchasesSnapshot.val()).filter(
+      (purchase) => purchase.status === "paid" && isPurchaseActive(purchase)
+    );
     const purchasedPlans = purchases.map(getPurchasePlan).filter((purchase) => purchase.planKey);
 
     const accessibleTests = tests.filter((test) => {
@@ -1330,7 +1350,7 @@ app.get("/api/admin/users", verifyAdminToken, async (req, res) => {
       const user = usersData[uid] || {};
       const userPurchases = normalizeList(purchasesData[uid] || {})
         .filter((purchase) => purchase.status === "paid")
-        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        .sort((a, b) => new Date(b.paidAt || b.createdAt || 0).getTime() - new Date(a.paidAt || a.createdAt || 0).getTime());
 
       const latestPurchase = userPurchases[0];
       const purchasePlan = latestPurchase ? getPurchasePlan(latestPurchase) : null;
@@ -1404,7 +1424,7 @@ app.get("/api/admin/overview", verifyAdminToken, async (req, res) => {
       const user = usersData[uid] || {};
       const userPurchases = normalizeList(purchasesData[uid] || {})
         .filter((purchase) => purchase.status === "paid")
-        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        .sort((a, b) => new Date(b.paidAt || b.createdAt || 0).getTime() - new Date(a.paidAt || a.createdAt || 0).getTime());
 
       const latestPurchase = userPurchases[0];
       const attempts = normalizeList(attemptsData[uid] || {});

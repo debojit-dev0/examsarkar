@@ -30,6 +30,7 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
   const [totalDurationSeconds, setTotalDurationSeconds] = useState(null);
   const [loadingAttempt, setLoadingAttempt] = useState(false);
   const submitLockRef = useRef(false);
+  const remainingSecondsRef = useRef(null);
 
   useEffect(() => {
     const fetchTest = async () => {
@@ -395,7 +396,7 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
     const notAttempted = total - attempted;
     const score = Math.round((correct / total) * 100);
     const accuracy = attempted > 0 ? Math.round((correct / attempted) * 100) : 0;
-    const capturedRemainingSeconds = Math.max(Number(remainingSeconds || 0), 0);
+    const capturedRemainingSeconds = Math.max(Number(remainingSecondsRef.current || 0), 0);
     const timeTakenSeconds = Number.isFinite(totalDurationSeconds)
       ? Math.max(totalDurationSeconds - capturedRemainingSeconds, 0)
       : null;
@@ -513,7 +514,17 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
 
     setResults(resultData);
     setSubmitted(true);
-  }, [answers, markedForReview, remainingSeconds, submitted, test, totalDurationSeconds]);
+  }, [answers, markedForReview, submitted, test, totalDurationSeconds]);
+
+  useEffect(() => {
+    remainingSecondsRef.current = remainingSeconds;
+  }, [remainingSeconds]);
+
+  useEffect(() => {
+    if (submitted && !reviewMode && attemptId && window.history.replaceState) {
+      window.history.replaceState({}, document.title, `/test/${testId}`);
+    }
+  }, [submitted, reviewMode, attemptId, testId]);
 
   useEffect(() => {
     if (submitted || remainingSeconds === null) return;
@@ -691,11 +702,6 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
   }
 
   if (submitted && !reviewMode) {
-    // Remove attemptId from URL
-    if (attemptId && window.history.replaceState) {
-      window.history.replaceState({}, document.title, `/test/${testId}`);
-    }
-
     // compute marks
     const marksPerQuestion = Number(test?.config?.marksPerQuestion || 10);
     const totalMarks = (test?.parsedQuestions?.length || 0) * marksPerQuestion;

@@ -456,6 +456,11 @@ const Dashboard = () => {
                       <div className="series-icon">{theme.icon}</div>
                       <h3 className="series-title">{series.planName || `${series.planPeriod} ${theme.label}`}</h3>
                       <p className="series-subtitle">{series.count} tests unlocked</p>
+                      {series.expiresAt && (
+                        <p className="series-subtitle" style={{ color: '#e53e3e', fontSize: '0.75rem' }}>
+                          Access expires: {new Date(series.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      )}
                       <p className="series-subtitle series-preview">{previewTests || 'New tests will appear here when admin uploads them.'}</p>
                       <button
                         className="series-button"

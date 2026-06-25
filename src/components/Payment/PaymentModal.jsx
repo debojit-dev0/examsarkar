@@ -146,15 +146,11 @@ export default function PaymentModal({ plan = 'Subscription', price = 499, perio
       });
 
       const data = await res.json();
-          if (res.status === 401) {
-            handleUnauthorized();
-            return;
-          }
       if (!res.ok) {
-            if (res.status === 401) {
-              handleUnauthorized();
-              return;
-            }
+        if (res.status === 401) {
+          handleUnauthorized();
+          return;
+        }
         showToast(data.message || 'We could not create your payment order. Please try again.', 'error');
         return;
       }
