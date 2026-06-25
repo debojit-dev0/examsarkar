@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+        xsi:schemaLocation="
+          http://www.sitemaps.org/schemas/sitemap/0.9
+          http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+
+  <!-- Home page – highest priority, updated daily due to daily quiz -->
+  <url>
+    <loc>https://www.examsarkar.com/</loc>
+    <lastmod>2026-06-23</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://www.examsarkar.com/og-image.jpg</image:loc>
+      <image:title>ExamSarkar – Free UPSC &amp; Government Exam Mock Tests Online</image:title>
+      <image:caption>India's top platform for UPSC and government exam preparation</image:caption>
+    </image:image>
+  </url>
+
+  <!-- Test Series page – second most important, updated daily -->
+  <url>
+    <loc>https://www.examsarkar.com/test-series</loc>
+    <lastmod>2026-06-23</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- Contact page – static, updated rarely -->
+  <url>
+    <loc>https://www.examsarkar.com/contact</loc>
+    <lastmod>2026-06-23</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
+</urlset>

@@ -1,10 +1,18 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Mail, Phone, MessageSquare } from 'lucide-react';
 import { FaInstagram, FaFacebook } from 'react-icons/fa';
 import Navbar from '../../components/Navbar/Navbar';
 import './ContactPage.css';
+import { useSEO } from '../../hooks/useSEO';
 
 const ContactPage = ({ onLoginClick, onSignupClick, onHomeClick, onPlansClick }) => {
+  useSEO({
+    title: "Contact Us – Support & Help",
+    description:
+      "Get in touch with ExamSarkar for any questions about UPSC exam preparation, test series, account support, or partnerships. We reply within 24 hours.",
+    url: "https://www.examsarkar.com/contact",
+  });
+
   return (
     <div className="contact-page-wrapper">
       <Navbar

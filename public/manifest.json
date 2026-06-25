@@ -1,6 +1,9 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "ExamSarkar",
+  "name": "ExamSarkar – UPSC & Govt Exam Prep",
+  "description": "Free UPSC, IAS, SSC mock tests and daily quizzes for government exam preparation.",
+  "lang": "en-IN",
+  "categories": ["education"],
   "icons": [
     {
       "src": "favicon.ico",
@@ -10,16 +13,37 @@
     {
       "src": "logo192.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
       "src": "logo512.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "orientation": "portrait",
+  "theme_color": "#1e40af",
+  "background_color": "#ffffff",
+  "prefer_related_applications": false,
+  "shortcuts": [
+    {
+      "name": "Daily Quiz",
+      "short_name": "Daily Quiz",
+      "description": "Take today's free UPSC daily quiz",
+      "url": "/test-series",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "My Dashboard",
+      "short_name": "Dashboard",
+      "description": "View your test history and performance",
+      "url": "/dashboard",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
+    }
+  ]
 }

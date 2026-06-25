@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState, useRef, useEffect } from "react";
 import { Routes, Route, useNavigate } from "react-router-dom";
+import { useSEO } from "./hooks/useSEO";
 
 import Navbar from "./components/Navbar/Navbar";
 import HeroSlider from "./components/HeroSlider/HeroSlider";
@@ -17,6 +18,7 @@ const SignupModal = lazy(() => import("./components/Auth/SignupModal"));
 const LoginModal = lazy(() => import("./components/Auth/LoginModal"));
 
 const TestSeriesPage = lazy(() => import("./pages/TestSeries/TestSeriesPage"));
+const MainsTestSeriesPage = lazy(() =>import("./pages/TestSeries/MainsTestSeriesPage"));
 const TestPage = lazy(() => import("./pages/TestPage/TestPage"));
 const Dashboard = lazy(() => import("./pages/Dashboard/Dashboard"));
 const PaymentPage = lazy(() => import("./pages/PaymentPage"));
@@ -24,6 +26,16 @@ const AdminAuthPage = lazy(() => import("./pages/Admin/AdminAuthPage"));
 const ContactPage = lazy(() => import("./pages/Contact/ContactPage"));
 
 const sectionFallback = <div style={{ minHeight: 120 }} />;
+
+function HomePageSEO() {
+  useSEO({
+    title: "ExamSarkar – Free UPSC & Government Exam Mock Tests Online",
+    description:
+      "Prepare for UPSC, IAS, SSC, and all government exams with ExamSarkar. Get free daily quizzes, full-length mock tests, detailed solutions, and performance analytics to crack your exam.",
+    url: "https://www.examsarkar.com/",
+  });
+  return null;
+}
 
 function DeferredSection({ minHeight = 120, rootMargin = "250px 0px", children }) {
   const [shouldRender, setShouldRender] = useState(false);
@@ -140,6 +152,7 @@ function AppContent() {
         path="/"
         element={
           <>
+            <HomePageSEO />
             {/* NAVBAR */}
             <Navbar
               onSignupClick={() => setAuthMode("signup")}
@@ -192,6 +205,16 @@ function AppContent() {
 
       {/* ================= TEST SERIES PAGE ================= */}
       <Route path="/test-series" element={<TestSeriesPage onLoginClick={handleLoginClick} onSignupClick={() => setAuthMode("signup")} />} />
+{/* route for mains */}
+      <Route
+  path="/mains-test-series"
+  element={
+    <MainsTestSeriesPage
+      onLoginClick={handleLoginClick}
+      onSignupClick={() => setAuthMode("signup")}
+    />
+  }
+/>
       
       {/* ================= TEST QUIZ PAGE ================= */}
       <Route path="/test/:testId" element={<TestPage onLoginClick={handleLoginClick} onSignupClick={() => setAuthMode("signup")} />} />

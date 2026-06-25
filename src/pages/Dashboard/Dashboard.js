@@ -5,9 +5,16 @@ import { buildApiUrl } from '../../utils/apiBaseUrl';
 import { fetchWithErrorHandling } from '../../utils/apiErrorHandler';
 import Navbar from "../../components/Navbar/Navbar";
 import { useNavigate } from 'react-router-dom';
-import { loadPendingAttempts, loadRecentQuizActivity, mergeRecentQuizActivity, setPendingAttempts } from '../../utils/recentQuizActivityStore';
+import { loadPendingAttempts, loadRecentQuizActivity, mergeRecentQuizActivity, removeRecentQuizActivity, saveRecentQuizActivity, setPendingAttempts } from '../../utils/recentQuizActivityStore';
+import { useSEO } from '../../hooks/useSEO';
 
 const Dashboard = () => {
+  useSEO({
+    title: "My Dashboard – Test History & Performance",
+    description: "View your UPSC exam test history, quiz scores, and performance analytics on ExamSarkar.",
+    url: "https://www.examsarkar.com/dashboard",
+    noindex: true,
+  });
   const navigate = useNavigate(); // ✅ REQUIRED
   const [userName, setUserName] = useState('User');
   const [searchQuery, setSearchQuery] = useState('');
@@ -74,7 +81,30 @@ const Dashboard = () => {
           body: JSON.stringify(payload),
         });
 
-        if (!response.ok) {
+        if (response.ok) {
+          const savedData = await response.json().catch(() => null);
+          if (savedData?.attemptId) {
+            const tempKey = `${payload.testId}-${payload.submittedAt}`;
+            removeRecentQuizActivity(tempKey);
+            saveRecentQuizActivity({
+              id: savedData.attemptId,
+              attemptId: savedData.attemptId,
+              testId: payload.testId,
+              title: payload.testName,
+              score: `${Math.round(Number(payload.score || 0))}%`,
+              accuracy: `${Math.round(Number(payload.accuracy || 0))}%`,
+              attempted: payload.attempted,
+              total: payload.total,
+              submittedAt: savedData.submittedAt || payload.submittedAt,
+              time: `${Math.max(Number(payload.attempted || 0), 1)} questions`,
+              date: new Date(savedData.submittedAt || payload.submittedAt).toLocaleDateString("en-IN", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric"
+              })
+            });
+          }
+        } else {
           remaining.push(payload);
         }
       } catch (error) {
@@ -391,16 +421,7 @@ const Dashboard = () => {
           </div>
 
           {/* Search Bar */}
-          <div className="search-container">
-            <Search size={20} className="search-icon" />
-            <input
-              type="text"
-              placeholder="Search for topics, test series or quizzes..."
-              className="search-input"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
+          
 
           {/* Purchased Test Series */}
           <div className="explore-section">
@@ -474,7 +495,7 @@ const Dashboard = () => {
                           {String(test.subject || 'all').toUpperCase()} • {String(test.type || 'daily').toUpperCase()} • {test.questionCount} questions
                         </p>
                       </div>
-                      <button className="review-btn" type="button" onClick={() => navigate('/test-series')}>
+                      <button className="review-btn" type="button" onClick={() => navigate(`/test/${test.id}`, { state: { testId: test.id } })}>
                         Start
                       </button>
                     </div>

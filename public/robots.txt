@@ -1,3 +1,33 @@
-# https://www.robotstxt.org/robotstxt.html
+# ExamSarkar – robots.txt
+# https://www.examsarkar.com
+
 User-agent: *
-Disallow:
+Allow: /
+Allow: /test-series
+Allow: /contact
+
+# Private / auth pages — do not index
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /payment
+Disallow: /test/
+
+# Crawl delay to be polite to the server
+Crawl-delay: 2
+
+# Googlebot gets no delay
+User-agent: Googlebot
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /payment
+Disallow: /test/
+
+User-agent: Bingbot
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /payment
+Disallow: /test/
+
+Sitemap: https://www.examsarkar.com/sitemap.xml

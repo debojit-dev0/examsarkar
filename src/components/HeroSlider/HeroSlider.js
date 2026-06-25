@@ -58,10 +58,10 @@ export default function HeroSlider({ onStartFreeTest, onLoginClick, onDashboardC
       {/* CONTENT */}
       <div className="content">
 
-        <h1>Crack UPSC Prelims 2026</h1>
+        <h1>Crack UPSC with ExamSarkar</h1>
 
         <p>
-          Practice smarter with CSAT, GS tests & real exam ranking
+        Every Test Brings You Closer To LBSNAA
         </p>
 
         {/* BUTTONS */}

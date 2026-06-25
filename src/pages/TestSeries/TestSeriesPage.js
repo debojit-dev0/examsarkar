@@ -8,8 +8,16 @@ import SignupModal from "../../components/Auth/SignupModal";
 import LoginModal from "../../components/Auth/LoginModal";
 import { preloadRazorpayCheckout, startPaymentCheckout } from "../../components/Payment/PaymentModal";
 import { loadAdminTests } from "../../utils/adminTestsStore";
+import { useSEO } from "../../hooks/useSEO";
+
 
 export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
+  useSEO({
+    title: "Free UPSC Mock Tests & Daily Quizzes – Test Series",
+    description:
+      "Access free daily UPSC quizzes and premium full-length mock test series on ExamSarkar. Practice IAS, SSC, and government exam questions with detailed solutions.",
+    url: "https://www.examsarkar.com/test-series",
+  });
   const navigate = useNavigate();
   const [authMode, setAuthMode] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(null); // Store which plan user selected
@@ -102,7 +110,7 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
     {
       title: "AIR 1 Mindset",
       desc: "Consistency beats talent when strategy is right",
-      img: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f"
+      img: "https://media.assettype.com/english-sentinelassam/import/h-upload/2022/08/18/375889-lbsnaa.webp?auto=format%2Ccompress&fit=max&w=1200"
     },
     {
       title: "Daily Discipline",

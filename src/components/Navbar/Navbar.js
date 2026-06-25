@@ -11,7 +11,8 @@ export default function Navbar({
   onLoginClick,
   onSignupClick,
   onHomeClick,
-  onPlansClick
+  onPlansClick,
+  onMainsClick 
 }) {
   const [user, setUser] = useState(null);
   const [profileDropdown, setProfileDropdown] = useState(false);
@@ -120,6 +121,14 @@ export default function Navbar({
 
     navigate("/test-series");
   };
+  const handleMainsClick = () => {
+    if (onMainsClick) {
+      onMainsClick();
+      return;
+    }
+
+    navigate("/mains-test-series");
+  };
 
   return (
     <header className="navbar">
@@ -137,7 +146,10 @@ export default function Navbar({
         </button>
 
         <button type="button" className="nav-link" onClick={handlePlansClick}>
-          Test Series
+         Prelims Test Series
+        </button>
+        <button type="button" className="nav-link" onClick={handleMainsClick}>
+         Mains Test Series
         </button>
 
 

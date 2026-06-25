@@ -182,3 +182,56 @@ export const enqueuePendingAttempt = (payload) => {
   const existing = readPendingAttempts().filter((item) => getPendingKey(item) !== key);
   persistPendingAttempts([payload, ...existing].slice(0, 20));
 };
+
+export const removeRecentQuizActivity = (id) => {
+  if (!id) return;
+  const existing = readStoredActivities().filter((item) => getActivityKey(item) !== String(id));
+  persistActivities(existing);
+  return existing;
+};
+
+const LOCAL_ATTEMPTS_KEY = "examSarkarLocalAttempts";
+
+export const saveLocalAttempt = (id, payload) => {
+  if (!id || !payload) return;
+  try {
+    const raw = window.localStorage.getItem(LOCAL_ATTEMPTS_KEY);
+    const store = raw ? JSON.parse(raw) : {};
+    store[String(id)] = payload;
+    const keys = Object.keys(store);
+    if (keys.length > 20) {
+      keys.slice(0, keys.length - 20).forEach((k) => delete store[k]);
+    }
+    window.localStorage.setItem(LOCAL_ATTEMPTS_KEY, JSON.stringify(store));
+  } catch {}
+};
+
+export const loadLocalAttempt = (id) => {
+  if (!id) return null;
+  try {
+    const raw = window.localStorage.getItem(LOCAL_ATTEMPTS_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw)[String(id)] || null;
+  } catch {
+    return null;
+  }
+};
+
+export const removeLocalAttempt = (id) => {
+  if (!id) return;
+  try {
+    const raw = window.localStorage.getItem(LOCAL_ATTEMPTS_KEY);
+    if (!raw) return;
+    const store = JSON.parse(raw);
+    delete store[String(id)];
+    window.localStorage.setItem(LOCAL_ATTEMPTS_KEY, JSON.stringify(store));
+  } catch {}
+};
+
+export const findPendingAttemptById = (tempId) => {
+  if (!tempId) return null;
+  const pending = readPendingAttempts();
+  return pending.find(
+    (p) => p && p.testId && p.submittedAt && `${p.testId}-${p.submittedAt}` === String(tempId)
+  ) || null;
+};

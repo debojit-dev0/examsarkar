@@ -4,10 +4,13 @@ import { loadAdminTests } from "../../utils/adminTestsStore";
 import { buildApiUrl } from "../../utils/apiBaseUrl";
 import Navbar from "../../components/Navbar/Navbar";
 import "./TestPage.css";
-import { enqueuePendingAttempt, saveRecentQuizActivity } from "../../utils/recentQuizActivityStore";
+import { enqueuePendingAttempt, findPendingAttemptById, loadLocalAttempt, removeLocalAttempt, removeRecentQuizActivity, saveLocalAttempt, saveRecentQuizActivity } from "../../utils/recentQuizActivityStore";
 import { fetchWithErrorHandling } from "../../utils/apiErrorHandler";
+import { useSEO } from "../../hooks/useSEO";
 
 export default function TestPage({ onLoginClick, onSignupClick }) {
+  useSEO({ noindex: true });
+
   const { testId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -31,7 +34,6 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
   useEffect(() => {
     const fetchTest = async () => {
       try {
-
         setLoading(true);
         const tests = await loadAdminTests();
         const foundTest = tests.find((t) => String(t.id) === String(testId));
@@ -44,24 +46,47 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
           return;
         }
 
-        setError("Test not found");
+        // When reviewing an attempt, loadArchivedAttempt will reconstruct
+        // the test from the local questionsSnapshot — don't show an error yet.
+        if (!attemptId) {
+          setError("Test not found");
+        }
         setLoading(false);
       } catch (err) {
         console.error("Failed to load test:", err);
-        setError("Failed to load test");
+        if (!attemptId) {
+          setError("Failed to load test");
+        }
         setLoading(false);
       }
     };
 
     fetchTest();
-  }, [testId]);
+  }, [testId, attemptId]);
 
   useEffect(() => {
     if (!attemptId) return;
 
     const loadArchivedAttempt = async () => {
       const accessToken = localStorage.getItem("accessToken") || localStorage.getItem("token");
-      if (!accessToken) return;
+      const isFirebaseSafeId = /^[^.#$[\]]+$/.test(attemptId);
+
+      if (!accessToken || !isFirebaseSafeId) {
+        const localAttempt = loadLocalAttempt(attemptId) || findPendingAttemptById(attemptId);
+        if (localAttempt && Array.isArray(localAttempt.questionsSnapshot) && localAttempt.questionsSnapshot.length > 0) {
+          setArchivedAttempt(localAttempt);
+          setTest({
+            id: localAttempt.testId || testId,
+            testName: localAttempt.testName || "Archived Test",
+            parsedQuestions: localAttempt.questionsSnapshot,
+            config: localAttempt.config || {}
+          });
+          setError(null);
+          setVisitedQuestions({ 0: true });
+          setLoading(false);
+        }
+        return;
+      }
 
       try {
         setLoadingAttempt(true);
@@ -74,6 +99,19 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
         });
 
         if (!res.ok) {
+          const localAttempt = loadLocalAttempt(attemptId) || findPendingAttemptById(attemptId);
+          if (localAttempt && Array.isArray(localAttempt.questionsSnapshot) && localAttempt.questionsSnapshot.length > 0) {
+            setArchivedAttempt(localAttempt);
+            setTest({
+              id: localAttempt.testId || testId,
+              testName: localAttempt.testName || "Archived Test",
+              parsedQuestions: localAttempt.questionsSnapshot,
+              config: localAttempt.config || {}
+            });
+            setError(null);
+            setVisitedQuestions({ 0: true });
+            setLoading(false);
+          }
           return;
         }
 
@@ -92,6 +130,7 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
             parsedQuestions: attempt.questionsSnapshot,
             config: attempt.config || {}
           });
+          setError(null);
           setVisitedQuestions({ 0: true });
           setLoading(false);
           return;
@@ -214,7 +253,34 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
 
     const loadSavedAttempt = async () => {
       const accessToken = localStorage.getItem("accessToken") || localStorage.getItem("token");
-      if (!accessToken) return;
+      const isFirebaseSafeId = /^[^.#$[\]]+$/.test(attemptId);
+
+      if (!accessToken || !isFirebaseSafeId) {
+        const localAttempt = loadLocalAttempt(attemptId) || findPendingAttemptById(attemptId);
+        if (localAttempt) {
+          setAnswers(localAttempt.answers && typeof localAttempt.answers === "object" ? localAttempt.answers : {});
+          setMarkedForReview(localAttempt.markedForReview && typeof localAttempt.markedForReview === "object" ? localAttempt.markedForReview : {});
+          setResults({
+            score: Number(localAttempt.score || 0),
+            accuracy: Number(localAttempt.accuracy || 0),
+            correct: Number(localAttempt.correct || 0),
+            total: Number(localAttempt.total || 0),
+            attempted: Number(localAttempt.attempted || 0),
+            notAttempted: Number(localAttempt.notAttempted || 0),
+            reviewCount: Number(localAttempt.reviewCount || 0),
+            answers: localAttempt.answers || {},
+            markedForReview: localAttempt.markedForReview || {},
+            testName: localAttempt.testName || test.testName,
+            timestamp: localAttempt.submittedAt ? new Date(localAttempt.submittedAt).toLocaleString() : new Date().toLocaleString(),
+          });
+          setCurrentQuestion(0);
+          setSubmitted(true);
+          setReviewMode(false);
+          setRemainingSeconds(null);
+          submitLockRef.current = true;
+        }
+        return;
+      }
 
       try {
         setLoadingAttempt(true);
@@ -227,6 +293,30 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
         });
 
         if (!res.ok) {
+          const localAttempt = loadLocalAttempt(attemptId) || findPendingAttemptById(attemptId);
+          if (localAttempt) {
+            setAnswers(localAttempt.answers && typeof localAttempt.answers === "object" ? localAttempt.answers : {});
+            setMarkedForReview(localAttempt.markedForReview && typeof localAttempt.markedForReview === "object" ? localAttempt.markedForReview : {});
+            setResults({
+              score: Number(localAttempt.score || 0),
+              accuracy: Number(localAttempt.accuracy || 0),
+              correct: Number(localAttempt.correct || 0),
+              total: Number(localAttempt.total || 0),
+              attempted: Number(localAttempt.attempted || 0),
+              notAttempted: Number(localAttempt.notAttempted || 0),
+              reviewCount: Number(localAttempt.reviewCount || 0),
+              answers: localAttempt.answers || {},
+              markedForReview: localAttempt.markedForReview || {},
+              testName: localAttempt.testName || test.testName,
+              timestamp: localAttempt.submittedAt ? new Date(localAttempt.submittedAt).toLocaleString() : new Date().toLocaleString(),
+            });
+            setCurrentQuestion(0);
+            setSubmitted(true);
+            setReviewMode(false);
+            setRemainingSeconds(null);
+            submitLockRef.current = true;
+            return;
+          }
           throw new Error("Failed to load saved attempt");
         }
 
@@ -355,8 +445,10 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
       submittedAt: localSubmittedAt,
     };
 
+    const tempActivityId = `${test.id}-${localSubmittedAt}`;
+    saveLocalAttempt(tempActivityId, attemptPayload);
     saveRecentQuizActivity({
-      id: `${test.id}-${localSubmittedAt}`,
+      id: tempActivityId,
       attemptId: null,
       testId: test.id,
       title: test.testName,
@@ -388,6 +480,8 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
         if (response.ok) {
           const savedAttempt = await response.json().catch(() => null);
           if (savedAttempt?.attemptId) {
+            removeLocalAttempt(tempActivityId);
+            removeRecentQuizActivity(tempActivityId);
             saveRecentQuizActivity({
               id: savedAttempt.attemptId,
               attemptId: savedAttempt.attemptId,
@@ -575,7 +669,7 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
     );
   }
 
-  if (error || !test) {
+  if (!test) {
     return (
       <>
         <Navbar

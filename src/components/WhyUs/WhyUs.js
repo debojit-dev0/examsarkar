@@ -5,58 +5,73 @@ export default function WhyUs() {
   const features = [
     {
       icon: <FaBookOpen />,
-      title: "UPSC-Level Questions",
-      desc: "Curated questions matching real exam difficulty and patterns."
+      title: "UPSC-Level Question Quality",
+      desc: "Every question is designed to match real UPSC Prelims & Mains difficulty standards."
     },
     {
       icon: <FaTrophy />,
-      title: "All India Ranking",
-      desc: "Compete with aspirants nationwide and track your true performance."
+      title: "All India Ranking System",
+      desc: "Compete with serious aspirants across India and understand your real standing."
     },
     {
       icon: <FaChartLine />,
-      title: "Detailed Analytics",
-      desc: "Understand strengths, weaknesses and improve with data-driven insights."
+      title: "Deep Performance Analytics",
+      desc: "Track accuracy, weak areas, and improvement trends with detailed insights."
     },
     {
       icon: <FaBolt />,
-      title: "Real Exam Experience",
-      desc: "Simulate actual exam environment with timer & structured tests."
+      title: "Real Exam Simulation",
+      desc: "Timed tests with UPSC-like pressure to build speed, accuracy, and confidence."
     }
   ];
 
   return (
     <section className="whyus-section">
       <div className="whyus-container">
-        <div className="whyus-eyebrow">Why students choose ExamSarkar</div>
 
+        {/* HEADER */}
         <div className="whyus-header">
-          <h2>Still Wondering Why Students Choose Us?</h2>
+
+          <div className="whyus-badge">
+            Why Top UPSC Aspirants Trust Us
+          </div>
+
+          <h2>
+            Built for Serious Aspirants,
+            <span> Not Casual Learners</span>
+          </h2>
+
           <p>
-            Everything you need to crack UPSC — practice, analysis, and real exam simulation in one place.
+            Practice UPSC-level questions, analyze performance deeply,
+            and simulate real exam pressure — all inside one ecosystem designed for selection.
           </p>
+
         </div>
 
+        {/* GRID */}
         <div className="whyus-grid">
           {features.map((item, index) => (
             <div className="whyus-card" key={index}>
               <div className="whyus-icon-wrap">
                 <div className="whyus-icon">{item.icon}</div>
               </div>
+
               <h3>{item.title}</h3>
               <p>{item.desc}</p>
             </div>
           ))}
         </div>
 
+        {/* HIGHLIGHTS */}
         <div className="whyus-highlight-row">
-          <div className="whyus-highlight-pill">Built for serious UPSC prep</div>
-          <div className="whyus-highlight-pill">Practice, rank, review, improve</div>
-          <div className="whyus-highlight-pill">Fast, focused, exam-ready</div>
+          <div className="whyus-highlight-pill">Daily Practice System</div>
+          <div className="whyus-highlight-pill">Real Exam Environment</div>
+          <div className="whyus-highlight-pill">Nationwide Competition</div>
         </div>
 
+        {/* FOOTER LINE */}
         <div className="whyus-footer-note">
-          Start your preparation journey today — consistency beats talent.
+          Consistency wins UPSC — we help you stay consistent, focused, and exam-ready.
         </div>
 
       </div>

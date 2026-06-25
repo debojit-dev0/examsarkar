@@ -791,7 +791,7 @@ app.post(
 app.get(
   "/api/user/test-attempts/:attemptId",
   verifyToken,
-  [param("attemptId").trim().isLength({ min: 1, max: 120 })],
+  [param("attemptId").trim().isLength({ min: 1, max: 120 }).matches(/^[^.#$[\]]+$/)],
   async (req, res) => {
     try {
       const errors = validationResult(req);

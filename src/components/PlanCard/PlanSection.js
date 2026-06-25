@@ -5,55 +5,114 @@ export default function PlanSection({ title, price, type, highlight }) {
 
   // 🔥 FEATURE LOGIC
   const getFeatures = (type, subject) => {
-
-    const common = [
-      "Timed Practice Tests",
-      "Instant Results & Solutions",
-      "Performance Tracking"
-    ];
-
     if (type === "daily") {
+      if (subject === "GS") {
+        return [
+          "01 Test per purchase",
+          "Focused on GS & CA",
+          "Timed Practice Test",
+          "Instant Results and Solutions",
+          "Performance Tracking",
+          "Exam Simulation Mode",
+        ];
+      }
+  
+      if (subject === "CSAT") {
+        return [
+          "01 Test per purchase",
+          "Focused on Analytical, RC",
+          "Timed Practice Test",
+          "Instant Results and Solutions",
+          "Performance Tracking",
+          "Exam Simulation Mode",
+        ];
+      }
+  
       return [
-        ...common,
-        "1 Free Sectional Test",
-        subject === "CSAT"
-          ? "Basic Aptitude Practice"
-          : subject === "GS"
-          ? "Daily Current Affairs MCQs"
-          : "GS + CSAT Combined Access"
-      ];
-    }
-
-    if (type === "weekly") {
-      return [
-        ...common,
-        "2 Free Tests (Sectional + Mini Mock)",
-        subject === "CSAT"
-          ? "Timed CSAT Practice Sets"
-          : subject === "GS"
-          ? "Topic-wise GS Tests"
-          : "Full GS + CSAT Access",
-        "Detailed Performance Analysis",
-        "Weak Area Identification"
-      ];
-    }
-
-    if (type === "monthly") {
-      return [
-        ...common,
-        "4 Full-Length Mock Tests",
-        subject === "CSAT"
-          ? "Advanced CSAT Drills"
-          : subject === "GS"
-          ? "Complete GS Coverage"
-          : "Complete GS + CSAT Bundle",
-        "All India Ranking",
-        "Detailed Analytics Dashboard",
+        "02 Tests per purchase",
+        "Focused on GS & CSAT",
+        "Timed Practice Test",
+        "Instant Results and Solutions",
+        "Performance Tracking",
         "Exam Simulation Mode",
-        "Topper Strategy Insights"
       ];
     }
-
+  
+    if (type === "weekly") {
+      if (subject === "GS") {
+        return [
+          "07 Tests per purchase",
+          "Focused on GS & CA",
+          "Timed Practice Test",
+          "Instant Results and Solutions",
+          "Performance Tracking",
+          "Exam Simulation Mode",
+          "Detailed Performance Analysis",
+        ];
+      }
+  
+      if (subject === "CSAT") {
+        return [
+          "07 Tests per purchase",
+          "Focused on Analytical and RC",
+          "Timed Practice Test",
+          "Instant Results and Solutions",
+          "Performance Tracking",
+          "Exam Simulation Mode",
+          "Detailed Performance Analysis",
+        ];
+      }
+  
+      return [
+        "14 Tests per purchase",
+        "Focused on GS & CSAT",
+        "Timed Practice Test",
+        "Instant Results and Solutions",
+        "Performance Tracking",
+        "Exam Simulation Mode",
+        "Detailed Performance Analysis",
+      ];
+    }
+  
+    if (type === "monthly") {
+      if (subject === "GS") {
+        return [
+          "30-31 Tests per purchase",
+          "Focused on GS & CA",
+          "Timed Practice Test",
+          "Instant Results and Solutions",
+          "Performance Tracking",
+          "Exam Simulation Mode",
+          "Detailed Performance Analysis",
+          "Weak Area Identification",
+        ];
+      }
+  
+      if (subject === "CSAT") {
+        return [
+          "30-31 Tests per purchase",
+          "Focused on Analytical & RC",
+          "Timed Practice Test",
+          "Instant Results and Solutions",
+          "Performance Tracking",
+          "Exam Simulation Mode",
+          "Detailed Performance Analysis",
+          "Weak Area Identification",
+        ];
+      }
+  
+      return [
+        "60-62 Tests per purchase",
+        "Focused on GS & CSAT",
+        "Timed Practice Test",
+        "Instant Results and Solutions",
+        "Performance Tracking",
+        "Exam Simulation Mode",
+        "Detailed Performance Analysis",
+        "Weak Area Identification",
+      ];
+    }
+  
     return [];
   };
 
@@ -67,41 +126,37 @@ export default function PlanSection({ title, price, type, highlight }) {
   // 🔥 PRICE LOGIC
   const getPrice = (subject) => {
     if (type === "daily") {
-      if (subject === "COMBO") return 149;
-      return 99;
+      return subject === "COMBO" ? 149 : 99;
     }
-
+  
     if (type === "weekly") {
-      if (subject === "COMBO") return 999;
-      return 599;
+      return subject === "COMBO" ? 999 : 599;
     }
-
+  
     if (type === "monthly") {
-      if (subject === "COMBO") return 3999;
-      return 2499;
+      return subject === "COMBO" ? 2499 : 1499;
     }
-
+  
     return price;
   };
-
   return (
     <div className={`plan-section ${highlight ? "highlight" : ""}`}>
 
       {/* HEADER */}
       <div className="plan-header">
-        <div>
-          <h2>{title}</h2>
-          <p className="plan-subtitle">{getSubtitle()}</p>
-        </div>
+  <div>
+    <h2>{title}</h2>
+    <p className="plan-subtitle">{getSubtitle()}</p>
+  </div>
 
-        {highlight && <span className="badge">Most Popular</span>}
-      </div>
+  {type === "weekly" && (
+    <span className="badge">Best Value</span>
+  )}
 
-      {/* WEEKLY TAG */}
-      {type === "weekly" && (
-        <div className="best-tag">Best Value</div>
-      )}
-
+  {highlight && type !== "weekly" && (
+    <span className="badge">Most Popular</span>
+  )}
+</div>
       {/* 🔥 CARDS (NOW 3) */}
       <div className="sub-row">
 

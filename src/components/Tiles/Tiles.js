@@ -1,37 +1,41 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  FaBolt,
-  FaGlobe,
-  FaBook,
+  FaClipboardCheck,
+  FaPenNib,
   FaCheckCircle,
+  FaArrowRight,
 } from "react-icons/fa";
 import "./Tiles.css";
 
 const testSeriesData = [
   {
-    title: "UPSC Prelims 2026 Complete Test Series",
-    users: "120K+",
-    tests: "85 Total Tests",
-    free: "10 Free Tests",
-    lang: "English, Hindi",
+    title: "Prelims Test Series",
+    icon: FaClipboardCheck,
+    description:
+      "Master GS Paper I & CSAT through exam-oriented mock tests, detailed analytics, and real exam simulation.",
     points: [
-      "Full Length Mock Tests",
-      "Sectional Tests",
-      "Previous Year Questions",
+      "GS Paper I & CSAT Coverage",
+      "Timed Mock Tests",
+      "Instant Results & Solutions",
+      "Performance Analytics",
     ],
+    buttonText: "Explore Prelims",
+    path: "/test-series",
   },
   {
-    title: "CSAT Prelims 2026 Test Series",
-    users: "80K+",
-    tests: "60 Total Tests",
-    free: "8 Free Tests",
-    lang: "English, Hindi",
+    title: "Mains Test Series",
+    icon: FaPenNib,
+    description:
+      "Enhance answer-writing skills with structured Mains tests, evaluation, and detailed feedback.",
     points: [
-      "Quantitative Aptitude",
-      "Logical Reasoning",
-      "Comprehension Practice",
+      "GS I, II, III & IV Coverage",
+      "Essay Practice",
+      "Expert Evaluation",
+      "Detailed Feedback",
     ],
+    buttonText: "Explore Mains",
+    path: "/mains-test-series",
   },
 ];
 
@@ -39,66 +43,67 @@ const TestSeries = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="container">
-      <h2 className="heading">Popular Test Series</h2>
+    <section className="container">
+      <div className="section-header">
+        <h2 className="heading">Choose Your Preparation Path</h2>
+        <p className="subheading">
+          Practice, evaluate and improve with structured UPSC-focused test
+          series.
+        </p>
+      </div>
 
       <div className="cards">
-        {testSeriesData.map((item, index) => (
-          <div
-            className="card"
-            key={index}
-            role="button"
-            tabIndex={0}
-            onClick={() => navigate("/test-series")}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                navigate("/test-series");
-              }
-            }}
-          >
-            
-            <div className="card-top">
-              <div className="logo">
-                <FaBook />
-              </div>
+        {testSeriesData.map((item, index) => {
+          const Icon = item.icon;
 
-              <div className="users">
-                <FaBolt /> {item.users}
-              </div>
-            </div>
-
-            <h3 className="title">{item.title}</h3>
-
-            <p className="tests">
-              {item.tests} | <span>{item.free}</span>
-            </p>
-
-            <p className="lang">
-              <FaGlobe /> {item.lang}
-            </p>
-
-            <ul className="features">
-              {item.points.map((p, i) => (
-                <li key={i}>
-                  <FaCheckCircle /> {p}
-                </li>
-              ))}
-            </ul>
-
-            <button
-              className="btn"
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                navigate("/test-series");
+          return (
+            <div
+              className="card"
+              key={index}
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate(item.path)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  navigate(item.path);
+                }
               }}
             >
-              View Test Series
-            </button>
-          </div>
-        ))}
+              <div className="card-header">
+                <div className="card-icon">
+                  <Icon />
+                </div>
+
+                <h3 className="title">{item.title}</h3>
+              </div>
+
+              <p className="description">{item.description}</p>
+
+              <ul className="features">
+                {item.points.map((point, i) => (
+                  <li key={i}>
+                    <FaCheckCircle />
+                    <span>{point}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <button
+                className="btn"
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  navigate(item.path);
+                }}
+              >
+                {item.buttonText}
+                <FaArrowRight />
+              </button>
+            </div>
+          );
+        })}
       </div>
-    </div>
+    </section>
   );
 };
 

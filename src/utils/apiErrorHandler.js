@@ -126,7 +126,11 @@ export async function fetchWithErrorHandling(url, options = {}) {
     if (response.status === 401) {
       const renewed = await handleUnauthorized();
       if (renewed) {
-        return fetch(url, options);
+        const newToken = localStorage.getItem('accessToken');
+        const retryOptions = newToken
+          ? { ...options, headers: { ...options.headers, Authorization: `Bearer ${newToken}` } }
+          : options;
+        return fetch(url, retryOptions);
       }
       throw new Error('Unauthorized: Session expired');
     }
