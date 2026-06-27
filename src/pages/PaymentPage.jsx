@@ -134,7 +134,7 @@ export default function PaymentPage() {
         }
       } catch (e) {}
     })();
-  }, [navigate]);
+  }, [navigate, planKey]);
 
   const handlePay = async () => {
     setLoading(true);
