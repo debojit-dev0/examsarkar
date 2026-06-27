@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useRef, useEffect } from "react";
-import { Routes, Route, useNavigate } from "react-router-dom";
+import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { useSEO } from "./hooks/useSEO";
 
 import Navbar from "./components/Navbar/Navbar";
@@ -77,6 +77,7 @@ function AppContent() {
   const [authMode, setAuthMode] = useState(null);
   const [homeStats, setHomeStats] = useState(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   // listen for global events to open auth modals (used by PaymentModal)
   useEffect(() => {
@@ -120,6 +121,10 @@ function AppContent() {
     };
   }, []);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [location.pathname]);
+
   const handleLoginClick = () => {
     const hasSession = Boolean(localStorage.getItem("accessToken") || localStorage.getItem("refreshToken"));
     if (hasSession) {
@@ -138,8 +143,8 @@ function AppContent() {
   // refs for smooth scroll
   const heroRef = useRef(null);
 
-  const scrollToHero = () => {
-    heroRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   };
 
   return (
@@ -157,7 +162,7 @@ function AppContent() {
             <Navbar
               onSignupClick={() => setAuthMode("signup")}
               onLoginClick={handleLoginClick}
-              onHomeClick={scrollToHero}
+              onHomeClick={scrollToTop}
               onPlansClick={() => navigate("/test-series")} // 🔥 CHANGED HERE
             />
 

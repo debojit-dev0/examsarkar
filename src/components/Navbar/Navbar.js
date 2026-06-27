@@ -21,6 +21,15 @@ export default function Navbar({
   const navigate = useNavigate();
   const location = useLocation();
 
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  };
+
+  const navigateTo = (path) => {
+    navigate(path);
+    scrollToTop();
+  };
+
   // ✅ Get user from localStorage on mount
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
@@ -87,7 +96,7 @@ export default function Navbar({
     setUser(null);
     setProfileData(null);
     setProfileDropdown(false);
-    navigate("/");
+    navigateTo("/");
   };
 
   // ✅ Get user initials for avatar
@@ -100,8 +109,12 @@ export default function Navbar({
 
   const visibleProfile = profileData || user;
   const handleHomeClick = () => {
-    if (location.pathname === "/" && onHomeClick) {
-      onHomeClick();
+    if (location.pathname === "/") {
+      if (onHomeClick) {
+        onHomeClick();
+      } else {
+        scrollToTop();
+      }
       return;
     }
 
@@ -110,7 +123,7 @@ export default function Navbar({
       return;
     }
 
-    navigate("/");
+    navigateTo("/");
   };
 
   const handlePlansClick = () => {
@@ -119,7 +132,7 @@ export default function Navbar({
       return;
     }
 
-    navigate("/test-series");
+    navigateTo("/test-series");
   };
   const handleMainsClick = () => {
     if (onMainsClick) {
@@ -127,7 +140,7 @@ export default function Navbar({
       return;
     }
 
-    navigate("/mains-test-series");
+    navigateTo("/mains-test-series");
   };
 
   return (
@@ -158,7 +171,7 @@ export default function Navbar({
           <button
             type="button"
             className="nav-link"
-            onClick={() => navigate("/dashboard")}
+            onClick={() => navigateTo("/dashboard")}
           >
             Dashboard
           </button>

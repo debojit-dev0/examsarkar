@@ -8,6 +8,50 @@ import { useNavigate } from 'react-router-dom';
 import { loadPendingAttempts, loadRecentQuizActivity, mergeRecentQuizActivity, removeRecentQuizActivity, saveRecentQuizActivity, setPendingAttempts } from '../../utils/recentQuizActivityStore';
 import { useSEO } from '../../hooks/useSEO';
 
+const MAINS_SUBJECT_INFO = {
+  gs1: { label: 'GS Paper I', icon: '📜', color: '#ff6b6b', sub: 'History • Geography • Society' },
+  gs2: { label: 'GS Paper II', icon: '⚖️', color: '#4dabf7', sub: 'Polity • Governance • IR' },
+  gs3: { label: 'GS Paper III', icon: '🌱', color: '#51cf66', sub: 'Economy • Environment • Security' },
+  gs4: { label: 'GS Paper IV', icon: '🧭', color: '#ffd43b', sub: 'Ethics • Integrity • Aptitude' },
+  essay: { label: 'Essay Writing', icon: '✍️', color: '#b197fc', sub: 'UPSC Essay Practice' }
+};
+
+function MainsCountdown({ durationMinutes, startedAt }) {
+  const [timeLeft, setTimeLeft] = React.useState(null);
+
+  React.useEffect(() => {
+    if (!startedAt || !durationMinutes) return;
+    const endTime = new Date(startedAt).getTime() + durationMinutes * 60 * 1000;
+
+    const tick = () => {
+      const remaining = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
+      setTimeLeft(remaining);
+    };
+
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [startedAt, durationMinutes]);
+
+  if (timeLeft === null) return null;
+
+  if (timeLeft <= 0) {
+    return <span className="mains-timer expired">⏰ Time Expired</span>;
+  }
+
+  const h = Math.floor(timeLeft / 3600);
+  const m = Math.floor((timeLeft % 3600) / 60);
+  const s = timeLeft % 60;
+  const fmt = (n) => String(n).padStart(2, '0');
+  const urgent = timeLeft < 600;
+
+  return (
+    <span className={`mains-timer${urgent ? ' urgent' : ''}`}>
+      ⏱ {fmt(h)}:{fmt(m)}:{fmt(s)} remaining
+    </span>
+  );
+}
+
 const Dashboard = () => {
   useSEO({
     title: "My Dashboard – Test History & Performance",
@@ -15,9 +59,12 @@ const Dashboard = () => {
     url: "https://www.examsarkar.com/dashboard",
     noindex: true,
   });
-  const navigate = useNavigate(); // ✅ REQUIRED
+  const navigate = useNavigate();
   const [userName, setUserName] = useState('User');
   const [purchaseData, setPurchaseData] = useState({ loading: true, purchasedPlans: [], accessibleTests: [] });
+  const [mainsPurchases, setMainsPurchases] = useState([]);
+  const [mainsLoading, setMainsLoading] = useState(true);
+  const [mainsUploadStatus, setMainsUploadStatus] = useState({});
   const [userDashboard, setUserDashboard] = useState({
     performanceSnapshot: { avgScore: null, bestScore: null, accuracy: null },
     currentStreak: 0,
@@ -192,10 +239,16 @@ const Dashboard = () => {
           }));
         }, 1200);
 
-        const [profileRes, dashboardRes, testsRes] = await Promise.all([
+        const mainsRequest = fetchWithErrorHandling(buildApiUrl('/api/user/mains/purchases'), {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+        });
+
+        const [profileRes, dashboardRes, testsRes, mainsRes] = await Promise.all([
           profileRequest,
           dashboardRequest,
-          testsRequest
+          testsRequest,
+          mainsRequest
         ]);
 
         if (profileRes?.ok) {
@@ -258,8 +311,15 @@ const Dashboard = () => {
         } else {
           setPurchaseData({ loading: false, purchasedPlans: [], accessibleTests: [] });
         }
+
+        if (mainsRes?.ok) {
+          const mainsJson = await mainsRes.json();
+          setMainsPurchases(Array.isArray(mainsJson.mainsPurchases) ? mainsJson.mainsPurchases : []);
+        }
+        setMainsLoading(false);
       } catch (err) {
         console.error('Dashboard load error:', err);
+        if (isActive) setMainsLoading(false);
       } finally {
         if (fastLoadTimerId) {
           clearTimeout(fastLoadTimerId);
@@ -270,6 +330,7 @@ const Dashboard = () => {
             purchasedPlans: current.purchasedPlans || [],
             accessibleTests: current.accessibleTests || []
           }));
+          setMainsLoading(false);
         }
       }
     };
@@ -351,6 +412,86 @@ const Dashboard = () => {
       return;
     }
     navigate('/test-series');
+  };
+
+  const handleMainsDownload = async (subject) => {
+    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const res = await fetchWithErrorHandling(buildApiUrl(`/api/mains/papers/${subject}`), {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res?.ok) {
+        alert('Question paper not available yet. Please try again later.');
+        return;
+      }
+      const data = await res.json();
+      // Trigger PDF download from base64
+      const link = document.createElement('a');
+      link.href = `data:application/pdf;base64,${data.pdfBase64}`;
+      link.download = data.fileName || `mains-${subject}-question-paper.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      // Refresh mains purchases to update startedAt
+      const refreshRes = await fetchWithErrorHandling(buildApiUrl('/api/user/mains/purchases'), {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (refreshRes?.ok) {
+        const json = await refreshRes.json();
+        setMainsPurchases(Array.isArray(json.mainsPurchases) ? json.mainsPurchases : []);
+      }
+    } catch (err) {
+      console.error('Download error:', err);
+      alert('Failed to download question paper.');
+    }
+  };
+
+  const handleMainsAnswerUpload = async (subject, file) => {
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+      alert('Please upload a PDF file.');
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      alert('File too large. Maximum size is 4MB.');
+      return;
+    }
+    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+    if (!token) return;
+
+    setMainsUploadStatus((prev) => ({ ...prev, [subject]: 'uploading' }));
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = e.target.result.split(',')[1];
+        const res = await fetchWithErrorHandling(buildApiUrl('/api/user/mains/answer'), {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subject, pdfBase64: base64, fileName: file.name })
+        });
+        if (res?.ok) {
+          setMainsUploadStatus((prev) => ({ ...prev, [subject]: 'success' }));
+          setMainsPurchases((prev) => prev.map((p) =>
+            p.subject === subject ? { ...p, hasSubmitted: true } : p
+          ));
+        } else {
+          setMainsUploadStatus((prev) => ({ ...prev, [subject]: 'error' }));
+          alert('Failed to submit answer sheet. Please try again.');
+        }
+      };
+      reader.onerror = () => {
+        setMainsUploadStatus((prev) => ({ ...prev, [subject]: 'error' }));
+        alert('Failed to read file.');
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Answer upload error:', err);
+      setMainsUploadStatus((prev) => ({ ...prev, [subject]: 'error' }));
+      alert('Failed to submit answer sheet.');
+    }
   };
 
   const streakMessage = userDashboard.currentStreak >= 3
@@ -521,6 +662,116 @@ const Dashboard = () => {
             <button className="challenge-button" onClick={handleNavigateToTest}>
               Attempt Now <ChevronRight size={20} />
             </button>
+          </div>
+
+          {/* Mains Test Series */}
+          <div className="explore-section" style={{ marginTop: '24px' }}>
+            <div className="section-header">
+              <h2 className="section-title">Your Mains Test Series</h2>
+              <p className="section-subtitle">
+                {mainsLoading
+                  ? 'Loading your mains access...'
+                  : mainsPurchases.length > 0
+                    ? 'Download question papers and submit your answer sheets.'
+                    : 'Purchase a Mains subject to get access to question papers.'}
+              </p>
+            </div>
+
+            {mainsLoading ? (
+              <div className="test-series-card loading-card">
+                <h3 className="series-title">Loading mains access...</h3>
+              </div>
+            ) : mainsPurchases.length === 0 ? (
+              <div className="test-series-card empty-series-card">
+                <div className="series-icon">📝</div>
+                <h3 className="series-title">No Mains papers purchased</h3>
+                <p className="series-subtitle">Buy a Mains subject at ₹90 to get access to question papers and submit answers.</p>
+                <button className="series-button" style={{ color: '#5B6BFF' }} onClick={() => navigate('/mains-test-series')}>
+                  View Mains Plans <ChevronRight size={18} />
+                </button>
+              </div>
+            ) : (
+              <div className="mains-dashboard-grid">
+                {mainsPurchases.map((mp) => {
+                  const info = MAINS_SUBJECT_INFO[mp.subject] || { label: mp.planName, icon: '📄', color: '#888', sub: '' };
+                  const uploadState = mainsUploadStatus[mp.subject];
+                  const timerStarted = Boolean(mp.startedAt);
+                  const endTime = mp.startedAt
+                    ? new Date(mp.startedAt).getTime() + mp.durationMinutes * 60 * 1000
+                    : null;
+                  const timeExpired = endTime ? Date.now() > endTime : false;
+
+                  return (
+                    <div key={mp.subject} className="mains-dashboard-card" style={{ borderTop: `4px solid ${info.color}` }}>
+                      <div className="mains-dash-header">
+                        <span className="mains-dash-icon">{info.icon}</span>
+                        <div>
+                          <h3 className="mains-dash-title">{info.label}</h3>
+                          <p className="mains-dash-sub">{info.sub}</p>
+                        </div>
+                      </div>
+
+                      {!mp.hasPaper && (
+                        <p className="mains-paper-status pending">Question paper not yet uploaded by admin.</p>
+                      )}
+
+                      {mp.hasPaper && !timerStarted && (
+                        <button
+                          className="mains-download-btn"
+                          onClick={() => handleMainsDownload(mp.subject)}
+                        >
+                          ⬇ Download Question Paper
+                        </button>
+                      )}
+
+                      {timerStarted && (
+                        <div className="mains-timer-row">
+                          <MainsCountdown durationMinutes={mp.durationMinutes} startedAt={mp.startedAt} />
+                        </div>
+                      )}
+
+                      {timerStarted && !timeExpired && (
+                        <div className="mains-upload-section">
+                          {mp.hasSubmitted || uploadState === 'success' ? (
+                            <p className="mains-submitted-badge">✅ Answer sheet submitted</p>
+                          ) : (
+                            <>
+                              <label className="mains-upload-btn" htmlFor={`upload-${mp.subject}`}>
+                                {uploadState === 'uploading' ? '⏳ Uploading...' : '📤 Upload Answer Sheet (PDF)'}
+                              </label>
+                              <input
+                                id={`upload-${mp.subject}`}
+                                type="file"
+                                accept="application/pdf"
+                                style={{ display: 'none' }}
+                                disabled={uploadState === 'uploading'}
+                                onChange={(e) => handleMainsAnswerUpload(mp.subject, e.target.files?.[0])}
+                              />
+                              {uploadState === 'error' && (
+                                <p className="mains-upload-error">Upload failed. Please try again.</p>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {timeExpired && !mp.hasSubmitted && uploadState !== 'success' && (
+                        <p className="mains-paper-status expired">⏰ Time expired. You can no longer submit.</p>
+                      )}
+
+                      {mp.hasPaper && timerStarted && (
+                        <button
+                          className="mains-redownload-btn"
+                          onClick={() => handleMainsDownload(mp.subject)}
+                        >
+                          ⬇ Download Again
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 

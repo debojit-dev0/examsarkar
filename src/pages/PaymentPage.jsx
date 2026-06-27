@@ -117,7 +117,7 @@ export default function PaymentPage() {
       const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
       if (!token) return;
       try {
-        const res = await fetch(buildApiUrl('/api/payment/status'), {
+        const res = await fetch(buildApiUrl(`/api/payment/status?planKey=${encodeURIComponent(planKey)}`), {
           headers: { Authorization: `Bearer ${token}` }
         });
 

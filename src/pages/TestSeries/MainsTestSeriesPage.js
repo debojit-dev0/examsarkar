@@ -4,6 +4,40 @@ import { useState } from "react";
 
 import Navbar from "../../components/Navbar/Navbar";
 import { useSEO } from "../../hooks/useSEO";
+import { buildApiUrl } from "../../utils/apiBaseUrl";
+import { restoreAuthSession } from "../../api/authApi";
+
+const RAZORPAY_SCRIPT = "https://checkout.razorpay.com/v1/checkout.js";
+let _rzpScriptPromise = null;
+function loadRazorpay() {
+  if (window.Razorpay) return Promise.resolve(true);
+  if (!_rzpScriptPromise) {
+    _rzpScriptPromise = new Promise((resolve) => {
+      const s = document.createElement("script");
+      s.src = RAZORPAY_SCRIPT;
+      s.onload = () => resolve(true);
+      s.onerror = () => { _rzpScriptPromise = null; resolve(false); };
+      document.body.appendChild(s);
+    });
+  }
+  return _rzpScriptPromise;
+}
+
+function showToast(msg, type = "info") {
+  const el = document.createElement("div");
+  el.style.cssText = `position:fixed;top:20px;right:20px;padding:14px 20px;border-radius:8px;color:#fff;font-weight:600;font-size:14px;z-index:99999;max-width:360px;background:${type === "error" ? "#ef4444" : type === "success" ? "#10b981" : "#3b82f6"}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+const SUBJECT_LABELS = {
+  gs1: 'GS Paper I',
+  gs2: 'GS Paper II',
+  gs3: 'GS Paper III',
+  gs4: 'GS Paper IV',
+  essay: 'Essay Writing'
+};
 
 export default function MainsTestSeriesPage({ onLoginClick, onSignupClick }) {
   const navigate = useNavigate();
@@ -16,6 +50,104 @@ export default function MainsTestSeriesPage({ onLoginClick, onSignupClick }) {
   });
 
   const [hovered, setHovered] = useState(null);
+  const [loadingSubject, setLoadingSubject] = useState(null);
+
+  const handleStartPractice = async (item) => {
+    let token = localStorage.getItem("accessToken") || localStorage.getItem("token");
+    if (!token) {
+      try {
+        const restoredSession = await restoreAuthSession();
+        token = restoredSession?.accessToken || localStorage.getItem("accessToken") || localStorage.getItem("token");
+      } catch (error) {
+        console.error("Failed to restore mains session:", error);
+      }
+    }
+
+    if (!token) {
+      window.dispatchEvent(new CustomEvent("openAuthModal", { detail: { mode: "login" } }));
+      return;
+    }
+
+    if (loadingSubject) return;
+    setLoadingSubject(item.key);
+
+    try {
+      const planKey = `mains:${item.key}`;
+      const planName = SUBJECT_LABELS[item.key] || item.title;
+
+      // Check if already purchased — if so, go directly to dashboard
+      const statusRes = await fetch(buildApiUrl(`/api/payment/status?planKey=${encodeURIComponent(planKey)}`), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (statusRes.ok) {
+        const statusData = await statusRes.json();
+        if (statusData.paid) {
+          navigate("/dashboard");
+          return;
+        }
+      }
+
+      // Create Razorpay order on the server (price is set server-side, not from URL)
+      const orderRes = await fetch(buildApiUrl("/api/payment/create-order"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ planKey, planName })
+      });
+
+      if (orderRes.status === 401) {
+        window.dispatchEvent(new CustomEvent("openAuthModal", { detail: { mode: "login" } }));
+        return;
+      }
+
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) {
+        showToast(orderData.message || "Could not start payment. Please try again.", "error");
+        return;
+      }
+
+      const ok = await loadRazorpay();
+      if (!ok) {
+        showToast("Payment gateway unavailable. Check your internet connection.", "error");
+        return;
+      }
+
+      const rzp = new window.Razorpay({
+        key: orderData.key_id || process.env.REACT_APP_RAZORPAY_KEY_ID || "",
+        amount: orderData.order.amount,
+        currency: orderData.order.currency,
+        name: "ExamSarkar",
+        description: planName,
+        order_id: orderData.order.id,
+        handler: async function (response) {
+          const verifyRes = await fetch(buildApiUrl("/api/payment/verify"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify(response)
+          });
+          const verifyData = await verifyRes.json();
+          if (verifyRes.ok && verifyData.success) {
+            showToast("Payment successful! Redirecting to dashboard...", "success");
+            setTimeout(() => navigate("/dashboard"), 800);
+          } else {
+            showToast("Payment verification failed. Please contact support.", "error");
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setLoadingSubject(null);
+            showToast("Payment cancelled.", "info");
+          }
+        }
+      });
+
+      rzp.open();
+    } catch (err) {
+      console.error("Mains payment error:", err);
+      showToast("Something went wrong. Please try again.", "error");
+    } finally {
+      setLoadingSubject(null);
+    }
+  };
 
   const sections = [
     {
@@ -64,7 +196,7 @@ export default function MainsTestSeriesPage({ onLoginClick, onSignupClick }) {
     <>
       <Navbar
         onHomeClick={() => navigate("/")}
-        onPlansClick={() => navigate("/mains-test-series")}
+        onMainsClick={() => navigate("/mains-test-series")}
         onLoginClick={onLoginClick}
         onSignupClick={onSignupClick}
       />
@@ -91,7 +223,7 @@ export default function MainsTestSeriesPage({ onLoginClick, onSignupClick }) {
                 className={`mains-card ${hovered === i ? "hovered" : ""}`}
                 onMouseEnter={() => setHovered(i)}
                 onMouseLeave={() => setHovered(null)}
-                onClick={() => navigate(item.route)}
+                onClick={() => handleStartPractice(item)}
                 style={{
                   borderTop: `4px solid ${item.color}`,
                 }}
@@ -109,8 +241,12 @@ export default function MainsTestSeriesPage({ onLoginClick, onSignupClick }) {
                 <p>{item.desc}</p>
 
                 <div className="mains-card-footer">
-                  <button>
-                    Start Practice →
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleStartPractice(item); }}
+                    disabled={loadingSubject === item.key}
+                    style={{ opacity: loadingSubject === item.key ? 0.7 : 1, cursor: loadingSubject === item.key ? "wait" : "pointer" }}
+                  >
+                    {loadingSubject === item.key ? "Please wait..." : "Start Practice →"}
                   </button>
                 </div>
               </div>

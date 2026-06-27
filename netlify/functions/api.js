@@ -54,7 +54,7 @@ app.use(
 );
 
 // Body parser
-app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
+app.use(express.json({ limit: "20mb", verify: (req, res, buf) => { req.rawBody = buf; } }));
 
 // Razorpay client
 const getRazorpayClient = () => {
@@ -75,6 +75,18 @@ const sha256 = (text) =>
 const ADMIN_TESTS_PATH = "adminTests";
 const USER_PURCHASES_PATH = "userPurchases";
 const USER_TEST_ATTEMPTS_PATH = "userTestAttempts";
+
+// Server-authoritative pricing — client-sent amount is IGNORED
+const PLAN_PRICES = {
+  'daily:gs': 9900, 'daily:csat': 9900, 'daily:combo': 14900, 'daily:all': 9900,
+  'weekly:gs': 59900, 'weekly:csat': 59900, 'weekly:combo': 99900, 'weekly:all': 59900,
+  'monthly:gs': 149900, 'monthly:csat': 149900, 'monthly:combo': 249900, 'monthly:all': 149900,
+  'mains:gs1': 9000, 'mains:gs2': 9000, 'mains:gs3': 9000, 'mains:gs4': 9000, 'mains:essay': 9000
+};
+const MAINS_PAPERS_PATH = "mainsPapers";
+const USER_MAINS_ANSWERS_PATH = "userMainsAnswers";
+const USER_MAINS_ACCESS_PATH = "userMainsAccess";
+const VALID_MAINS_SUBJECTS = ['gs1', 'gs2', 'gs3', 'gs4', 'essay'];
 
 const normalizeList = (value) => {
   if (Array.isArray(value)) return value.filter(Boolean);
@@ -130,11 +142,16 @@ const buildPlanKey = (planPeriod, planSubject) => `${normalizePlanPeriod(planPer
 
 const parsePlanKey = (planKey) => {
   const [planPeriod, planSubject] = String(planKey || "").split(":");
+  if (planPeriod === 'mains') {
+    return { planPeriod: 'mains', planSubject: planSubject || 'gs1' };
+  }
   return {
     planPeriod: normalizePlanPeriod(planPeriod),
     planSubject: normalizePlanSubject(planSubject)
   };
 };
+
+const PLAN_DURATION_DAYS = { daily: 1, weekly: 7, monthly: 30 };
 
 const getTestPeriod = (test) => normalizePlanPeriod(test?.type);
 const getTestSubject = (test) => normalizePlanSubject(test?.subject || test?.planSubject || test?.segment || "all");
@@ -153,12 +170,43 @@ const getAllowedSubjects = (planSubject) => {
 
 const getPurchasePlan = (purchase) => {
   const fromKey = parsePlanKey(purchase?.planKey);
+  const planPeriod = fromKey.planPeriod;
+  const paidAt = purchase?.paidAt || null;
+
+  if (planPeriod === 'mains') {
+    const expiresAt = paidAt
+      ? new Date(new Date(paidAt).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      : null;
+    return {
+      planPeriod,
+      planSubject: fromKey.planSubject,
+      planKey: purchase?.planKey || `mains:${fromKey.planSubject}`,
+      planName: purchase?.planName || `Mains ${(fromKey.planSubject || 'gs1').toUpperCase()}`,
+      paidAt,
+      expiresAt
+    };
+  }
+
+  const days = PLAN_DURATION_DAYS[planPeriod] ?? 1;
+  const expiresAt = paidAt
+    ? new Date(new Date(paidAt).getTime() + days * 24 * 60 * 60 * 1000).toISOString()
+    : null;
   return {
-    planPeriod: fromKey.planPeriod,
+    planPeriod,
     planSubject: fromKey.planSubject,
-    planKey: buildPlanKey(fromKey.planPeriod, fromKey.planSubject),
-    planName: purchase?.planName || `${fromKey.planPeriod[0].toUpperCase()}${fromKey.planPeriod.slice(1)} ${fromKey.planSubject.toUpperCase()}`
+    planKey: buildPlanKey(planPeriod, fromKey.planSubject),
+    planName: purchase?.planName || `${planPeriod[0].toUpperCase()}${planPeriod.slice(1)} ${fromKey.planSubject.toUpperCase()}`,
+    paidAt,
+    expiresAt
   };
+};
+
+const isPurchaseActive = (purchase) => {
+  if (!purchase.paidAt) return false;
+  const { planPeriod } = parsePlanKey(purchase.planKey);
+  const days = planPeriod === 'mains' ? 30 : (PLAN_DURATION_DAYS[planPeriod] ?? 1);
+  const expiresAt = new Date(new Date(purchase.paidAt).getTime() + days * 24 * 60 * 60 * 1000);
+  return new Date() < expiresAt;
 };
 
 const testMatchesPurchase = (test, purchase) => {
@@ -294,24 +342,17 @@ app.get("/api/user/tests", verifyToken, async (req, res) => {
     ]);
 
     const tests = normalizeList(testsSnapshot.val());
-    const purchases = normalizeList(purchasesSnapshot.val()).filter((purchase) => purchase.status === "paid");
+    const purchases = normalizeList(purchasesSnapshot.val()).filter(
+      (purchase) =>
+        purchase.status === "paid" &&
+        isPurchaseActive(purchase) &&
+        !String(purchase.planKey || "").startsWith("mains:")
+    );
     const purchasedPlans = purchases.map(getPurchasePlan).filter((purchase) => purchase.planKey);
 
-    // Get today's date in YYYY-MM-DD format for filtering daily quizzes
-    const today = new Date().toISOString().split("T")[0];
-
     const accessibleTests = tests.filter((test) => {
-      // Check if test is accessible (free or purchased)
-      const isAccessible = test.access === "free" || purchasedPlans.some((purchase) => testMatchesPurchase(test, purchase));
-      if (!isAccessible) return false;
-
-      // If it's a daily-quiz, only include if it's for today
-      if (test.type === "daily-quiz") {
-        const testDate = test.date ? test.date.split("T")[0] : null;
-        return testDate === today;
-      }
-
-      return true;
+      if (test.access === "free") return true;
+      return purchasedPlans.some((purchase) => testMatchesPurchase(test, purchase));
     });
 
     const planSummaries = purchasedPlans.map((purchase) => {
@@ -391,7 +432,7 @@ app.get("/api/admin/users", verifyAdminToken, async (req, res) => {
       const user = usersData[uid] || {};
       const userPurchases = normalizeList(purchasesData[uid] || {})
         .filter((purchase) => purchase.status === "paid")
-        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        .sort((a, b) => new Date(b.paidAt || b.createdAt || 0).getTime() - new Date(a.paidAt || a.createdAt || 0).getTime());
 
       const latestPurchase = userPurchases[0];
       const purchasePlan = latestPurchase ? getPurchasePlan(latestPurchase) : null;
@@ -465,7 +506,7 @@ app.get("/api/admin/overview", verifyAdminToken, async (req, res) => {
       const user = usersData[uid] || {};
       const userPurchases = normalizeList(purchasesData[uid] || {})
         .filter((purchase) => purchase.status === "paid")
-        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        .sort((a, b) => new Date(b.paidAt || b.createdAt || 0).getTime() - new Date(a.paidAt || a.createdAt || 0).getTime());
 
       const latestPurchase = userPurchases[0];
       const attempts = normalizeList(attemptsData[uid] || {});
@@ -591,7 +632,8 @@ app.post("/api/auth/register", async (req, res) => {
       email: normalizedEmail,
       phone: phone.trim(),
       passwordHash: await bcrypt.hash(password, 12),
-      createdAt
+      createdAt,
+      updatedAt: createdAt
     };
 
     // Check if email exists
@@ -1049,8 +1091,8 @@ app.post(
   "/api/payment/create-order",
   verifyToken,
   [
-    body("amount").isInt({ min: 1 }),
-    body("planKey").matches(/^(daily|weekly|monthly):(gs|csat|combo|all)$/),
+    body("amount").optional().isInt({ min: 1 }),
+    body("planKey").matches(/^(daily|weekly|monthly|mains):(gs|csat|combo|all|gs1|gs2|gs3|gs4|essay)$/),
     body("planName").trim().isLength({ min: 1, max: 100 })
   ],
   async (req, res) => {
@@ -1065,14 +1107,17 @@ app.post(
         return res.status(503).json({ message: "Payment service unavailable" });
       }
 
-      const { amount, planKey, planName } = req.body;
+      const { planKey, planName } = req.body;
       const uid = req.user.uid;
 
-      if (amount < 100 || amount > 500000) {
-        return res.status(400).json({ message: "Invalid amount" });
+      const purchasePlan = getPurchasePlan({ planKey, planName });
+
+      // SERVER-SIDE PRICE ENFORCEMENT — client amount is ignored
+      const amount = PLAN_PRICES[purchasePlan.planKey];
+      if (!amount) {
+        return res.status(400).json({ message: "Invalid plan" });
       }
 
-      const purchasePlan = getPurchasePlan({ planKey, planName });
       const shortUid = uid.replace(/-/g, "").slice(0, 12);
       const ts = String(Date.now()).slice(-6);
       const receipt = `rcpt_${shortUid}_${ts}`;
@@ -1176,13 +1221,20 @@ app.post("/api/payment/verify", verifyToken, async (req, res) => {
 app.get("/api/payment/status", verifyToken, async (req, res) => {
   try {
     const uid = req.user.uid;
+    const filterPlanKey = req.query.planKey || null;
     const snapshot = await database.ref(`userPayments/${uid}`).get();
     if (!snapshot.exists()) return res.status(200).json({ paid: false });
 
     const payments = snapshot.val();
     for (const [orderId, info] of Object.entries(payments)) {
       if (info.status === 'paid') {
-        return res.status(200).json({ paid: true, orderId, info });
+        if (filterPlanKey) {
+          if (info.planKey === filterPlanKey) {
+            return res.status(200).json({ paid: true, orderId, info });
+          }
+        } else {
+          return res.status(200).json({ paid: true, orderId, info });
+        }
       }
     }
 
@@ -1239,6 +1291,244 @@ app.post('/api/payment/webhook', async (req, res) => {
   } catch (error) {
     console.error('Webhook error:', error);
     return res.status(500).send('error');
+  }
+});
+
+// ============ MAINS TEST SERIES ENDPOINTS ============
+
+// Admin: Upload mains question paper
+app.post("/api/admin/mains/papers", verifyAdminToken, async (req, res) => {
+  try {
+    const { subject, pdfBase64, fileName, durationMinutes } = req.body;
+    if (!VALID_MAINS_SUBJECTS.includes(subject)) {
+      return res.status(400).json({ message: "Invalid subject" });
+    }
+    if (!pdfBase64 || !fileName) {
+      return res.status(400).json({ message: "PDF data and file name are required" });
+    }
+    const duration = Number(durationMinutes);
+    if (!duration || duration <= 0 || duration > 600) {
+      return res.status(400).json({ message: "Duration must be 1-600 minutes" });
+    }
+    await database.ref(`${MAINS_PAPERS_PATH}/${subject}`).set({
+      pdfBase64,
+      fileName,
+      durationMinutes: duration,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: req.admin.email
+    });
+    return res.status(200).json({ success: true, message: "Question paper uploaded successfully" });
+  } catch (error) {
+    console.error("Mains paper upload error:", error.message);
+    return res.status(500).json({ message: "Failed to upload question paper" });
+  }
+});
+
+// Admin: Get mains papers metadata (without PDF data)
+app.get("/api/admin/mains/papers", verifyAdminToken, async (req, res) => {
+  try {
+    const snapshot = await database.ref(MAINS_PAPERS_PATH).get();
+    const papers = {};
+    if (snapshot.exists()) {
+      const data = snapshot.val();
+      for (const [subj, info] of Object.entries(data)) {
+        papers[subj] = {
+          subject: subj,
+          fileName: info.fileName,
+          durationMinutes: info.durationMinutes,
+          uploadedAt: info.uploadedAt,
+          uploadedBy: info.uploadedBy
+        };
+      }
+    }
+    return res.status(200).json({ papers });
+  } catch (error) {
+    console.error("Mains papers list error:", error.message);
+    return res.status(500).json({ message: "Failed to load papers" });
+  }
+});
+
+// User: Get mains purchases + paper availability
+app.get("/api/user/mains/purchases", verifyToken, async (req, res) => {
+  try {
+    const { uid } = req.user;
+    const [purchasesSnapshot, accessSnapshot, answersSnapshot, papersSnapshot] = await Promise.all([
+      database.ref(`${USER_PURCHASES_PATH}/${uid}`).get(),
+      database.ref(`${USER_MAINS_ACCESS_PATH}/${uid}`).get(),
+      database.ref(USER_MAINS_ANSWERS_PATH).get(),
+      database.ref(MAINS_PAPERS_PATH).get()
+    ]);
+
+    const purchases = normalizeList(purchasesSnapshot.val())
+      .filter((p) => p.status === "paid" && String(p.planKey || "").startsWith("mains:") && isPurchaseActive(p));
+
+    const accessData = accessSnapshot.exists() ? accessSnapshot.val() : {};
+    const papers = papersSnapshot.exists() ? papersSnapshot.val() : {};
+    const answersData = answersSnapshot.exists() ? answersSnapshot.val() : {};
+
+    const mainsPurchases = purchases.map((p) => {
+      const subject = String(p.planKey || "").split(":")[1];
+      const paper = papers[subject] || {};
+      const access = accessData[subject] || {};
+      const hasSubmitted = Boolean(answersData[subject] && answersData[subject][uid]);
+      return {
+        planKey: p.planKey,
+        subject,
+        planName: p.planName,
+        paidAt: p.paidAt,
+        hasPaper: Boolean(paper.fileName),
+        fileName: paper.fileName || null,
+        durationMinutes: paper.durationMinutes || 120,
+        startedAt: access.startedAt || null,
+        hasSubmitted
+      };
+    });
+
+    return res.status(200).json({ mainsPurchases });
+  } catch (error) {
+    console.error("User mains purchases error:", error.message);
+    return res.status(500).json({ message: "Failed to load mains purchases" });
+  }
+});
+
+// User: Download mains question paper (requires payment)
+app.get("/api/mains/papers/:subject", verifyToken, async (req, res) => {
+  try {
+    const { subject } = req.params;
+    const { uid } = req.user;
+
+    if (!VALID_MAINS_SUBJECTS.includes(subject)) {
+      return res.status(400).json({ message: "Invalid subject" });
+    }
+
+    const purchasesSnapshot = await database.ref(`${USER_PURCHASES_PATH}/${uid}`).get();
+    const purchases = normalizeList(purchasesSnapshot.val())
+      .filter((p) => p.status === "paid" && isPurchaseActive(p));
+    const hasPaid = purchases.some((p) => p.planKey === `mains:${subject}`);
+
+    if (!hasPaid) {
+      return res.status(403).json({ message: "Payment required to access this paper" });
+    }
+
+    const paperSnapshot = await database.ref(`${MAINS_PAPERS_PATH}/${subject}`).get();
+    if (!paperSnapshot.exists()) {
+      return res.status(404).json({ message: "Question paper not yet available. Check back later." });
+    }
+
+    const paper = paperSnapshot.val();
+    const accessRef = database.ref(`${USER_MAINS_ACCESS_PATH}/${uid}/${subject}`);
+    const accessSnapshot = await accessRef.get();
+    let startedAt;
+    if (!accessSnapshot.exists()) {
+      startedAt = new Date().toISOString();
+      await accessRef.set({ startedAt });
+    } else {
+      startedAt = accessSnapshot.val().startedAt;
+    }
+
+    return res.status(200).json({
+      pdfBase64: paper.pdfBase64,
+      fileName: paper.fileName,
+      durationMinutes: paper.durationMinutes,
+      startedAt
+    });
+  } catch (error) {
+    console.error("Mains paper download error:", error.message);
+    return res.status(500).json({ message: "Failed to download question paper" });
+  }
+});
+
+// User: Submit answer sheet
+app.post("/api/user/mains/answer", verifyToken, async (req, res) => {
+  try {
+    const { uid } = req.user;
+    const { subject, pdfBase64, fileName } = req.body;
+
+    if (!VALID_MAINS_SUBJECTS.includes(subject)) {
+      return res.status(400).json({ message: "Invalid subject" });
+    }
+    if (!pdfBase64 || !fileName) {
+      return res.status(400).json({ message: "Answer sheet PDF is required" });
+    }
+
+    const purchasesSnapshot = await database.ref(`${USER_PURCHASES_PATH}/${uid}`).get();
+    const purchases = normalizeList(purchasesSnapshot.val()).filter((p) => p.status === "paid");
+    const hasPaid = purchases.some((p) => p.planKey === `mains:${subject}`);
+
+    if (!hasPaid) {
+      return res.status(403).json({ message: "Payment required" });
+    }
+
+    const userSnapshot = await database.ref(`users/${uid}`).get();
+    const user = userSnapshot.exists() ? userSnapshot.val() : {};
+
+    await database.ref(`${USER_MAINS_ANSWERS_PATH}/${subject}/${uid}`).set({
+      pdfBase64,
+      fileName,
+      uploadedAt: new Date().toISOString(),
+      userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User',
+      userEmail: user.email || req.user.email || '',
+      uid
+    });
+
+    return res.status(200).json({ success: true, message: "Answer sheet submitted successfully" });
+  } catch (error) {
+    console.error("Answer sheet upload error:", error.message);
+    return res.status(500).json({ message: "Failed to submit answer sheet" });
+  }
+});
+
+// Admin: List all answer submissions
+app.get("/api/admin/mains/answers", verifyAdminToken, async (req, res) => {
+  try {
+    const { subject } = req.query;
+    const snapshot = await database.ref(USER_MAINS_ANSWERS_PATH).get();
+
+    if (!snapshot.exists()) {
+      return res.status(200).json({ submissions: [] });
+    }
+
+    const allData = snapshot.val();
+    const submissions = [];
+
+    for (const [subj, users] of Object.entries(allData)) {
+      if (subject && subj !== subject) continue;
+      if (!VALID_MAINS_SUBJECTS.includes(subj)) continue;
+      for (const [userId, data] of Object.entries(users || {})) {
+        submissions.push({
+          uid: userId,
+          subject: subj,
+          fileName: data.fileName,
+          uploadedAt: data.uploadedAt,
+          userName: data.userName,
+          userEmail: data.userEmail
+        });
+      }
+    }
+
+    submissions.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+    return res.status(200).json({ submissions });
+  } catch (error) {
+    console.error("Admin mains answers list error:", error.message);
+    return res.status(500).json({ message: "Failed to load submissions" });
+  }
+});
+
+// Admin: Download specific answer sheet
+app.get("/api/admin/mains/answers/:subject/:uid", verifyAdminToken, async (req, res) => {
+  try {
+    const { subject, uid } = req.params;
+    if (!VALID_MAINS_SUBJECTS.includes(subject)) {
+      return res.status(400).json({ message: "Invalid subject" });
+    }
+    const snapshot = await database.ref(`${USER_MAINS_ANSWERS_PATH}/${subject}/${uid}`).get();
+    if (!snapshot.exists()) {
+      return res.status(404).json({ message: "Answer sheet not found" });
+    }
+    return res.status(200).json({ answer: snapshot.val() });
+  } catch (error) {
+    console.error("Admin answer download error:", error.message);
+    return res.status(500).json({ message: "Failed to load answer sheet" });
   }
 });
 

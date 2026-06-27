@@ -15,7 +15,9 @@ import {
   FiX,
   FiShield,
   FiUploadCloud,
-  FiUsers
+  FiUsers,
+  FiDownload,
+  FiInbox
 } from "react-icons/fi";
 import JSZip from "jszip";
 import { buildApiUrl } from "../../utils/apiBaseUrl";
@@ -278,6 +280,22 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
 
   const [uploadFeedback, setUploadFeedback] = useState("");
   const [selectedPlan, setSelectedPlan] = useState(PLAN_WEEKLY);
+
+  // Mains Test Series state
+  const MAINS_SUBJECTS = [
+    { key: 'gs1', label: 'GS Paper I' },
+    { key: 'gs2', label: 'GS Paper II' },
+    { key: 'gs3', label: 'GS Paper III' },
+    { key: 'gs4', label: 'GS Paper IV' },
+    { key: 'essay', label: 'Essay Writing' }
+  ];
+  const [mainsActiveSubject, setMainsActiveSubject] = useState('gs1');
+  const [mainsAnswerSubjectFilter, setMainsAnswerSubjectFilter] = useState('all');
+  const [mainsPapers, setMainsPapers] = useState({});
+  const [mainsAnswers, setMainsAnswers] = useState([]);
+  const [mainsAnswersLoading, setMainsAnswersLoading] = useState(false);
+  const [mainsUploadForm, setMainsUploadForm] = useState({ durationMinutes: '120', file: null });
+  const [mainsUploadFeedback, setMainsUploadFeedback] = useState("");
   const [reviewedTestId, setReviewedTestId] = useState(null);
   const [reviewQuestionIndex, setReviewQuestionIndex] = useState(0);
   const [editQuestionDraft, setEditQuestionDraft] = useState(null);
@@ -397,6 +415,54 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
       totalUsers: prev.totalUsers ?? users.length
     }));
   }, [users, usersLoading]);
+
+  useEffect(() => {
+    let isActive = true;
+    const fetchMainsPapers = async () => {
+      try {
+        const adminSession = getAdminSessionHeader();
+        if (!adminSession) return;
+        const response = await fetch(buildApiUrl("/api/admin/mains/papers"), {
+          method: "GET",
+          headers: { "x-admin-session": adminSession, "Content-Type": "application/json" }
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (isActive) setMainsPapers(data.papers || {});
+      } catch (err) {
+        console.error("Failed to load mains papers:", err);
+      }
+    };
+    fetchMainsPapers();
+    return () => { isActive = false; };
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+    const fetchMainsAnswers = async () => {
+      setMainsAnswersLoading(true);
+      try {
+        const adminSession = getAdminSessionHeader();
+        if (!adminSession) return;
+        const url = mainsAnswerSubjectFilter === 'all'
+          ? buildApiUrl("/api/admin/mains/answers")
+          : buildApiUrl(`/api/admin/mains/answers?subject=${mainsAnswerSubjectFilter}`);
+        const response = await fetch(url, {
+          method: "GET",
+          headers: { "x-admin-session": adminSession, "Content-Type": "application/json" }
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (isActive) setMainsAnswers(Array.isArray(data.submissions) ? data.submissions : []);
+      } catch (err) {
+        console.error("Failed to load mains answers:", err);
+      } finally {
+        if (isActive) setMainsAnswersLoading(false);
+      }
+    };
+    fetchMainsAnswers();
+    return () => { isActive = false; };
+  }, [mainsAnswerSubjectFilter]);
 
   const reviewedTest = useMemo(
     () => tests.find((test) => test.id === reviewedTestId) || null,
@@ -739,6 +805,93 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
     }
   };
 
+  const handleMainsUpload = async (event) => {
+    event.preventDefault();
+    setMainsUploadFeedback("");
+
+    const duration = Number(mainsUploadForm.durationMinutes);
+    if (!duration || duration <= 0 || duration > 600) {
+      setMainsUploadFeedback("Duration must be between 1 and 600 minutes.");
+      return;
+    }
+    if (!mainsUploadForm.file) {
+      setMainsUploadFeedback("Please select a PDF file to upload.");
+      return;
+    }
+    if (mainsUploadForm.file.type !== 'application/pdf') {
+      setMainsUploadFeedback("Only PDF files are allowed.");
+      return;
+    }
+    if (mainsUploadForm.file.size > 4 * 1024 * 1024) {
+      setMainsUploadFeedback("File too large. Maximum size is 4MB (PDF will be base64 encoded before upload).");
+      return;
+    }
+
+    setMainsUploadFeedback("Uploading...");
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = e.target.result.split(',')[1];
+        const adminSession = getAdminSessionHeader();
+        const response = await fetch(buildApiUrl("/api/admin/mains/papers"), {
+          method: "POST",
+          headers: { "x-admin-session": adminSession, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subject: mainsActiveSubject,
+            pdfBase64: base64,
+            fileName: mainsUploadForm.file.name,
+            durationMinutes: duration
+          })
+        });
+        if (response.ok) {
+          setMainsUploadFeedback(`Successfully uploaded question paper for ${MAINS_SUBJECTS.find((s) => s.key === mainsActiveSubject)?.label}.`);
+          setMainsPapers((prev) => ({
+            ...prev,
+            [mainsActiveSubject]: {
+              subject: mainsActiveSubject,
+              fileName: mainsUploadForm.file.name,
+              durationMinutes: duration,
+              uploadedAt: new Date().toISOString()
+            }
+          }));
+          setMainsUploadForm({ durationMinutes: '120', file: null });
+        } else {
+          const err = await response.json().catch(() => ({}));
+          setMainsUploadFeedback(err.message || "Upload failed. Please try again.");
+        }
+      };
+      reader.onerror = () => setMainsUploadFeedback("Failed to read file.");
+      reader.readAsDataURL(mainsUploadForm.file);
+    } catch (err) {
+      console.error("Mains upload error:", err);
+      setMainsUploadFeedback("Upload failed. Please try again.");
+    }
+  };
+
+  const handleMainsAnswerDownload = async (subject, uid, fileName) => {
+    try {
+      const adminSession = getAdminSessionHeader();
+      const response = await fetch(buildApiUrl(`/api/admin/mains/answers/${subject}/${uid}`), {
+        method: "GET",
+        headers: { "x-admin-session": adminSession }
+      });
+      if (!response.ok) {
+        alert("Failed to download answer sheet.");
+        return;
+      }
+      const data = await response.json();
+      const link = document.createElement('a');
+      link.href = `data:application/pdf;base64,${data.answer.pdfBase64}`;
+      link.download = fileName || `answer-${subject}-${uid}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Answer download error:", err);
+      alert("Failed to download answer sheet.");
+    }
+  };
+
   return (
     <div className="admin-page-shell">
       <div className="ambient-orb ambient-orb-one" />
@@ -870,8 +1023,8 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
         <section className="admin-content-grid">
           <article className="panel-card upload-panel">
             <div className="panel-title-row">
-              <h2><FiUploadCloud /> Upload Question Paper</h2>
-              <span className="panel-badge">One upload, auto assignment</span>
+              <h2><FiUploadCloud /> Prelims – Upload Question Paper</h2>
+              <span className="panel-badge">MCQ · Auto Assignment</span>
             </div>
 
             <form className="upload-form" onSubmit={handleUpload}>
@@ -1017,7 +1170,101 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
             </form>
           </article>
 
-          {role === ROLE_SUPER_ADMIN ? (
+          {/* RIGHT PANEL: Mains Test Series Upload */}
+          <article className="panel-card upload-panel">
+            <div className="panel-title-row">
+              <h2><FiUploadCloud /> Mains – Upload Question Paper</h2>
+              <span className="panel-badge">PDF · Essay Answer</span>
+            </div>
+
+            {/* Subject Tabs */}
+            <div className="plan-tabs" style={{ marginBottom: '16px', flexWrap: 'wrap', gap: '6px' }}>
+              {MAINS_SUBJECTS.map((s) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  className={mainsActiveSubject === s.key ? "tab-btn active" : "tab-btn"}
+                  onClick={() => { setMainsActiveSubject(s.key); setMainsUploadFeedback(""); }}
+                  style={{ fontSize: '12px', padding: '6px 10px' }}
+                >
+                  {s.label}
+                  {mainsPapers[s.key] && <span style={{ marginLeft: '4px', color: '#1d9c6a' }}>✓</span>}
+                </button>
+              ))}
+            </div>
+
+            {/* Current paper status */}
+            {mainsPapers[mainsActiveSubject] ? (
+              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 12px', marginBottom: '14px' }}>
+                <p style={{ margin: 0, color: '#166534', fontSize: '13px', lineHeight: '1.6' }}>
+                  <strong>Current:</strong> {mainsPapers[mainsActiveSubject].fileName}<br />
+                  <strong>Duration:</strong> {mainsPapers[mainsActiveSubject].durationMinutes} min &nbsp;|&nbsp;
+                  <strong>Uploaded:</strong> {mainsPapers[mainsActiveSubject].uploadedAt ? new Date(mainsPapers[mainsActiveSubject].uploadedAt).toLocaleString('en-IN') : '–'}
+                </p>
+              </div>
+            ) : (
+              <div style={{ background: '#fef9ec', border: '1px solid #fde68a', borderRadius: '8px', padding: '10px 12px', marginBottom: '14px' }}>
+                <p style={{ margin: 0, color: '#92400e', fontSize: '13px' }}>No paper uploaded yet for {MAINS_SUBJECTS.find((s) => s.key === mainsActiveSubject)?.label}.</p>
+              </div>
+            )}
+
+            <form className="upload-form" onSubmit={handleMainsUpload}>
+              <label>
+                Exam Duration (Minutes)
+                <input
+                  type="number"
+                  min="1"
+                  max="600"
+                  value={mainsUploadForm.durationMinutes}
+                  onChange={(e) => setMainsUploadForm((prev) => ({ ...prev, durationMinutes: e.target.value }))}
+                  placeholder="Ex: 180"
+                />
+              </label>
+
+              <label>
+                Upload Question Paper (PDF only, max 4MB)
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(e) => setMainsUploadForm((prev) => ({ ...prev, file: e.target.files?.[0] || null }))}
+                />
+              </label>
+
+              <button type="submit" className="primary-btn">
+                <FiUploadCloud /> Upload for {MAINS_SUBJECTS.find((s) => s.key === mainsActiveSubject)?.label}
+              </button>
+
+              {mainsUploadFeedback && (
+                <p className="feedback-text" style={{ color: mainsUploadFeedback.startsWith('Success') || mainsUploadFeedback.startsWith('Upload') ? '#1d9c6a' : '#c0392b' }}>
+                  {mainsUploadFeedback}
+                </p>
+              )}
+            </form>
+
+            {/* All Subjects Status Summary */}
+            <div style={{ marginTop: '16px', borderTop: '1px solid #e5e7eb', paddingTop: '12px' }}>
+              <p style={{ fontSize: '12px', fontWeight: 700, color: '#5e6f95', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>All Subjects Status</p>
+              {MAINS_SUBJECTS.map((s) => {
+                const paper = mainsPapers[s.key];
+                return (
+                  <div key={s.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #f3f4f6', fontSize: '13px' }}>
+                    <span style={{ fontWeight: 600, color: '#131d35' }}>{s.label}</span>
+                    {paper ? (
+                      <span style={{ color: '#1d9c6a', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <FiClock size={12} /> {paper.durationMinutes} min
+                      </span>
+                    ) : (
+                      <span style={{ color: '#e67e22', fontSize: '12px' }}>Not uploaded</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </article>
+        </section>
+
+        <section className="admin-content-grid lower-grid">
+          {role === ROLE_SUPER_ADMIN && (
             <article className="panel-card plans-panel">
               <div className="panel-title-row">
                 <h2><FiGrid /> Plan Builder</h2>
@@ -1095,21 +1342,8 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
                 </div>
               </div>
             </article>
-          ) : (
-            <article className="panel-card restricted-panel">
-              <div className="panel-title-row">
-                <h2><FiLock /> Restricted Mode</h2>
-                <span className="panel-badge">Content Admin</span>
-              </div>
-              <p>
-                You can upload question papers and create/edit tests. Payment analytics, user management,
-                and plan pricing are available only to Super Admin.
-              </p>
-            </article>
           )}
-        </section>
 
-        <section className="admin-content-grid lower-grid">
           <article className="panel-card flow-panel">
             <h2><FiDatabase /> Flow Validation</h2>
             <ol>
@@ -1147,40 +1381,62 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
             </div>
           </article>
 
-          {role === ROLE_SUPER_ADMIN ? (
-            <article className="panel-card users-panel">
-              <h2><FiUsers /> Users and Access</h2>
-              <div className="user-list">
-                {usersLoading ? (
-                  <div className="user-row">
-                    <div>
-                      <h4>Loading users...</h4>
-                      <p>Fetching latest activity data.</p>
-                    </div>
+        </section>
+        {/* ===== MAINS ANSWER SUBMISSIONS ===== */}
+        <section className="panel-card" style={{ marginTop: '24px' }}>
+          <div className="panel-title-row">
+            <h2><FiInbox /> Student Answer Sheet Submissions</h2>
+            <span className="panel-badge">Mains</span>
+          </div>
+
+          <div style={{ marginBottom: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: '14px', color: '#5e6f95', fontWeight: 600 }}>Filter by subject:</span>
+            <button
+              type="button"
+              className={mainsAnswerSubjectFilter === 'all' ? "tab-btn active" : "tab-btn"}
+              onClick={() => setMainsAnswerSubjectFilter('all')}
+            >All</button>
+            {MAINS_SUBJECTS.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                className={mainsAnswerSubjectFilter === s.key ? "tab-btn active" : "tab-btn"}
+                onClick={() => setMainsAnswerSubjectFilter(s.key)}
+              >{s.label}</button>
+            ))}
+          </div>
+
+          {mainsAnswersLoading ? (
+            <p style={{ color: '#5e6f95', padding: '16px' }}>Loading submissions...</p>
+          ) : mainsAnswers.length === 0 ? (
+            <p className="empty-state">No answer submissions yet.</p>
+          ) : (
+            <div className="quiz-library-list">
+              {mainsAnswers.map((ans, i) => (
+                <div key={`${ans.uid}-${ans.subject}-${i}`} className="quiz-library-row">
+                  <div className="quiz-library-info">
+                    <h4>{ans.userName || ans.userEmail || ans.uid}</h4>
+                    <p>
+                      Subject: <strong>{MAINS_SUBJECTS.find((s) => s.key === ans.subject)?.label || ans.subject}</strong> |
+                      File: <strong>{ans.fileName}</strong> |
+                      Submitted: <strong>{ans.uploadedAt ? new Date(ans.uploadedAt).toLocaleString('en-IN') : '–'}</strong>
+                    </p>
+                    {ans.userEmail && <p style={{ fontSize: '12px', color: '#5e6f95' }}>{ans.userEmail}</p>}
                   </div>
-                ) : users.length > 0 ? (
-                  users.map((user) => (
-                    <div key={user.id} className="user-row">
-                      <div>
-                        <h4>{user.name}</h4>
-                        <p>Plan: {user.plan}</p>
-                      </div>
-                      <span className={user.activeWindow === "inactive" ? "status-dot inactive" : "status-dot"}>
-                        {user.activeWindow === "today" ? "Active Today" : user.activeWindow === "week" ? "Active This Week" : "Inactive"}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="user-row">
-                    <div>
-                      <h4>No user activity yet</h4>
-                      <p>Users will appear once they register or attempt tests.</p>
-                    </div>
+                  <div className="quiz-library-actions">
+                    <button
+                      type="button"
+                      className="icon-action-btn"
+                      title="Download answer sheet"
+                      onClick={() => handleMainsAnswerDownload(ans.subject, ans.uid, ans.fileName)}
+                    >
+                      <FiDownload />
+                    </button>
                   </div>
-                )}
-              </div>
-            </article>
-          ) : null}
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       </main>
 
