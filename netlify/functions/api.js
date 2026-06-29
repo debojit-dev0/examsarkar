@@ -668,47 +668,130 @@ app.post("/api/auth/register", async (req, res) => {
 
 // ================= FORGOT PASSWORD =================
 
-// Step 1: User enters email, we create reset token
 app.post("/api/auth/forgot-password", async (req, res) => {
   try {
     const { email } = req.body;
 
     if (!email) {
-      return res.status(400).json({ message: "Email is required" });
+      return res.status(400).json({ message: "Email required" });
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    const emailKey = Buffer.from(normalizedEmail).toString("base64url");
+    const emailKey = toEmailKey(normalizedEmail);
 
-    const snapshot = await database.ref(`usersByEmail/${emailKey}`).get();
+    const emailSnap = await database.ref(`usersByEmail/${emailKey}`).get();
 
-    if (!snapshot.exists()) {
-      return res.status(404).json({ message: "User not found" });
+    // security: same response always
+    if (!emailSnap.exists()) {
+      return res.status(200).json({
+        message: "If email exists, reset link sent"
+      });
     }
 
-    const uid = snapshot.val();
+    const uid = emailSnap.val();
 
-    const resetToken = crypto.randomUUID();
-    const expiry = Date.now() + 1000 * 60 * 15; // 15 minutes
+    // token generate
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    console.log("===== FORGOT PASSWORD =====");
+console.log("Generated Token:", resetToken);
+    const expiry = Date.now() + 15 * 60 * 1000; // 15 min
 
-    await database.ref(`passwordReset/${resetToken}`).set({
-      uid,
-      email: normalizedEmail,
-      expiry
+    // delete old token first (IMPORTANT FIX)
+await database.ref(`passwordReset/${uid}`).remove();
+
+await database.ref(`passwordReset/${uid}`).set({
+  token: resetToken,
+  expiry
+});
+
+const check = await database.ref(`passwordReset/${uid}`).get();
+
+console.log("Stored Token:", check.val().token);
+    const resetLink = `${process.env.FRONTEND_URL}/reset-password?uid=${uid}&token=${resetToken}`;
+
+    // SEND EMAIL
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: normalizedEmail,
+      subject: "Password Reset Request",
+      html: `
+        <h2>Password Reset</h2>
+        <p>Click below link to reset password (valid 15 min)</p>
+        <a href="${resetLink}" target="_blank">Reset Password</a>
+      `
     });
 
-    // ⚠️ In real apps we send email.
-    // For now we return token (simple version)
     return res.status(200).json({
-      message: "Reset link created",
-      resetToken
+      message: "Reset email sent"
     });
 
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Error creating reset link" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Failed to send reset email" });
   }
 });
+app.post("/api/auth/reset-password", async (req, res) => {
+  try {
+    const { uid, token, newPassword } = req.body;
+
+    if (!uid || !token || !newPassword) {
+      return res.status(400).json({
+        message: "Missing required fields"
+      });
+    }
+
+    const snap = await database.ref(`passwordReset/${uid}`).get();
+
+    if (!snap.exists()) {
+      return res.status(400).json({
+        message: "Invalid or expired reset link"
+      });
+    }
+
+    const data = snap.val();
+    console.log("===== RESET PASSWORD =====");
+console.log("Received Token:", token);
+console.log("Database Token:", data.token);
+console.log("Equal:", token === data.token);
+
+    if (Date.now() > Number(data.expiry)) {
+      await database.ref(`passwordReset/${uid}`).remove();
+
+      return res.status(400).json({
+        message: "Reset link has expired"
+      });
+    }
+
+    if (token !== data.token) {
+      console.log("DB Token :", data.token);
+      console.log("User Token :", token);
+
+      return res.status(400).json({
+        message: "Invalid token"
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    await database.ref(`users/${uid}`).update({
+      passwordHash,
+      updatedAt: new Date().toISOString()
+    });
+
+    await database.ref(`passwordReset/${uid}`).remove();
+
+    return res.json({
+      message: "Password reset successful"
+    });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({
+      message: "Internal server error"
+    });
+  }
+});
+
 
 // Login endpoint
 app.post("/api/auth/login", async (req, res) => {
