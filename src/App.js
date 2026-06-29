@@ -6,6 +6,7 @@ import Navbar from "./components/Navbar/Navbar";
 import HeroSlider from "./components/HeroSlider/HeroSlider";
 import "./App.css";
 import { buildApiUrl } from "./utils/apiBaseUrl";
+import ResetPassword from "./components/Auth/ResetPassword";
 
 const Tiles = lazy(() => import("./components/Tiles/Tiles"));
 const WhyUs = lazy(() => import("./components/WhyUs/WhyUs"));
@@ -16,6 +17,7 @@ const Footer = lazy(() => import("./components/Footer/Footer"));
 
 const SignupModal = lazy(() => import("./components/Auth/SignupModal"));
 const LoginModal = lazy(() => import("./components/Auth/LoginModal"));
+
 
 const TestSeriesPage = lazy(() => import("./pages/TestSeries/TestSeriesPage"));
 const MainsTestSeriesPage = lazy(() =>import("./pages/TestSeries/MainsTestSeriesPage"));
@@ -220,6 +222,7 @@ function AppContent() {
     />
   }
 />
+<Route path="/reset-password" element={<ResetPassword />} />
       
       {/* ================= TEST QUIZ PAGE ================= */}
       <Route path="/test/:testId" element={<TestPage onLoginClick={handleLoginClick} onSignupClick={() => setAuthMode("signup")} />} />

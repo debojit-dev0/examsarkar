@@ -650,19 +650,7 @@ const Dashboard = () => {
             )}
           </div>
 
-          {/* Daily Challenge */}
-          <div className="daily-challenge-section">
-            <div className="challenge-content">
-              <div className="challenge-icon">🏆</div>
-              <div className="challenge-text">
-                <h3 className="challenge-title">Daily Challenge</h3>
-                <p className="challenge-subtitle">Attempt today's quiz and build your streak.</p>
-              </div>
-            </div>
-            <button className="challenge-button" onClick={handleNavigateToTest}>
-              Attempt Now <ChevronRight size={20} />
-            </button>
-          </div>
+          
 
           {/* Mains Test Series */}
           <div className="explore-section" style={{ marginTop: '24px' }}>
@@ -772,6 +760,19 @@ const Dashboard = () => {
                 })}
               </div>
             )}
+          </div>
+          {/* Daily Challenge */}
+          <div className="daily-challenge-section">
+            <div className="challenge-content">
+              <div className="challenge-icon">🏆</div>
+              <div className="challenge-text">
+                <h3 className="challenge-title">Daily Challenge</h3>
+                <p className="challenge-subtitle">Attempt today's quiz and build your streak.</p>
+              </div>
+            </div>
+            <button className="challenge-button" onClick={handleNavigateToTest}>
+              Attempt Now <ChevronRight size={20} />
+            </button>
           </div>
         </div>
 

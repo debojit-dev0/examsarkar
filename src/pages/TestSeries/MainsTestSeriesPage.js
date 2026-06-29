@@ -213,6 +213,34 @@ export default function MainsTestSeriesPage({ onLoginClick, onSignupClick }) {
             <div className="mains-badge">
               Built for serious Mains aspirants
             </div>
+
+            <div className="syllabus-glass-card">
+  <div className="syllabus-content">
+    <div className="syllabus-icon">📘</div>
+
+    <div>
+      <h3>Complete UPSC Mains Syllabus</h3>
+      <p>
+        GS Papers I–IV + Essay syllabus compiled in a structured, exam-ready format.
+      </p>
+
+      <div className="syllabus-tags">
+        <span>✔ Official Pattern</span>
+        <span>✔ Updated</span>
+        <span>✔ Print Friendly</span>
+      </div>
+    </div>
+  </div>
+
+  <a
+    href="/syllabus/SYLLABUS.docx"
+    download
+    className="syllabus-download-btn"
+    onClick={(e) => e.stopPropagation()}
+  >
+    ⬇ Download Syllabus
+  </a>
+</div>
           </div>
 
           {/* GRID */}
@@ -257,7 +285,7 @@ export default function MainsTestSeriesPage({ onLoginClick, onSignupClick }) {
           <div className="mains-info">
             <h3>How this works</h3>
             <ul>
-              <li>Daily/weekly answer writing practice</li>
+              <li>Daily answer writing practice</li>
               <li>UPSC-style evaluation structure</li>
               <li>Model answers + frameworks</li>
               <li>Progressive difficulty building</li>

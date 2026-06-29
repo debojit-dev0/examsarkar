@@ -666,6 +666,50 @@ app.post("/api/auth/register", async (req, res) => {
   }
 });
 
+// ================= FORGOT PASSWORD =================
+
+// Step 1: User enters email, we create reset token
+app.post("/api/auth/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const emailKey = Buffer.from(normalizedEmail).toString("base64url");
+
+    const snapshot = await database.ref(`usersByEmail/${emailKey}`).get();
+
+    if (!snapshot.exists()) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const uid = snapshot.val();
+
+    const resetToken = crypto.randomUUID();
+    const expiry = Date.now() + 1000 * 60 * 15; // 15 minutes
+
+    await database.ref(`passwordReset/${resetToken}`).set({
+      uid,
+      email: normalizedEmail,
+      expiry
+    });
+
+    // ⚠️ In real apps we send email.
+    // For now we return token (simple version)
+    return res.status(200).json({
+      message: "Reset link created",
+      resetToken
+    });
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Error creating reset link" });
+  }
+});
+
 // Login endpoint
 app.post("/api/auth/login", async (req, res) => {
   try {
@@ -752,6 +796,45 @@ app.post("/api/auth/refresh", async (req, res) => {
   }
 });
 
+// ================= RESET PASSWORD =================
+
+app.post("/api/auth/reset-password", async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({ message: "Missing data" });
+    }
+
+    const snapshot = await database.ref(`passwordReset/${token}`).get();
+
+    if (!snapshot.exists()) {
+      return res.status(400).json({ message: "Invalid token" });
+    }
+
+    const data = snapshot.val();
+
+    if (Date.now() > data.expiry) {
+      return res.status(400).json({ message: "Token expired" });
+    }
+
+    const passwordHash = sha256(newPassword);
+
+    await database.ref(`users/${data.uid}`).update({
+      passwordHash
+    });
+
+    await database.ref(`passwordReset/${token}`).remove();
+
+    return res.status(200).json({
+      message: "Password updated successfully"
+    });
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Reset failed" });
+  }
+});
 // User profile
 app.get("/api/user/profile", verifyToken, async (req, res) => {
   try {

@@ -4,24 +4,28 @@ import "./Testimonials.css";
 
 const testimonials = [
   {
-    name: "Rohit Sharma",
+    name: "Aman Singh",
     role: "UPSC Aspirant",
     text: "The mock tests are very close to real UPSC level. My accuracy improved a lot.",
+    image: "https://i.pravatar.cc/150?img=12"
   },
   {
     name: "Ananya Verma",
     role: "CSAT Aspirant",
     text: "CSAT practice here is amazing. The analysis helped me understand my weak areas.",
+    image: "https://i.pravatar.cc/150?img=32"
   },
   {
-    name: "Karan Mehta",
+    name: "Siya Mehta",
     role: "UPSC Aspirant",
     text: "Simple UI and powerful insights. This platform really boosted my preparation.",
+    image: "https://i.pravatar.cc/150?img=45"
   },
   {
-    name: "Aman Rathore",
+    name: "Rachel Mathai",
     role: "UPSC Aspirant",
-    text: "Simple UI and powerful insights. This platform really boosted my preparation.",
+    text: "Really helpful platform for structured preparation.",
+    image: "https://i.pravatar.cc/150?img=5"
   },
 ];
 
@@ -62,12 +66,19 @@ const Testimonials = () => {
               <p className="testimonial-text">“{item.text}”</p>
 
               <div className="user">
-                <div className="avatar">{item.name.charAt(0)}</div>
-                <div>
-                  <h4>{item.name}</h4>
-                  <span>{item.role}</span>
-                </div>
-              </div>
+  
+  <img
+    src={item.image}
+    alt={item.name}
+    className="avatar-img"
+  />
+
+  <div>
+    <h4>{item.name}</h4>
+    <span>{item.role}</span>
+  </div>
+
+</div>
 
             </div>
           ))}

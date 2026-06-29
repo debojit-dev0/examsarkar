@@ -2,23 +2,34 @@ import "./SignupModal.css";
 import { FaTimes } from "react-icons/fa";
 import { Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
-import { loginUser, setStoredAuthSession } from "../../api/authApi";
+import { loginUser, setStoredAuthSession, forgotPassword } from "../../api/authApi";
 
-export default function LoginModal({ isOpen, onClose, switchToSignup, planData }) {
+export default function LoginModal({
+  isOpen,
+  onClose,
+  switchToSignup,
+  planData,
+}) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
   const [showPassword, setShowPassword] = useState(false);
+
+  // forgot password state
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotMsg, setForgotMsg] = useState("");
 
   const [form, setForm] = useState({
     email: "",
-    password: ""
+    password: "",
   });
+
+  
 
   const handleChange = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
-
-    // clear messages while typing
     if (error) setError("");
     if (success) setSuccess("");
   };
@@ -34,35 +45,58 @@ export default function LoginModal({ isOpen, onClose, switchToSignup, planData }
     try {
       setIsSubmitting(true);
 
-      const { user, accessToken, refreshToken } = await loginUser(form.email, form.password);
+      const { user, accessToken, refreshToken } = await loginUser(
+        form.email,
+        form.password
+      );
 
-      // ✅ SUCCESS MESSAGE
-      setSuccess(`Welcome ${user.firstName || "back"}, login successful.`);
-
-      // ✅ STORE USER AND TOKENS IN LOCALSTORAGE
-      // NOTE: In production, these should be stored in httpOnly cookies instead
       setStoredAuthSession({ user, accessToken, refreshToken });
 
-      // ✅ CLOSE MODAL
+      setSuccess(`Welcome ${user.firstName || "back"}, login successful.`);
+
       onClose();
 
-      // ✅ OPEN PAYMENT POPUP OR GO TO DASHBOARD AFTER LOGIN
       setTimeout(() => {
         if (planData?.title && planData?.price) {
-          window.dispatchEvent(new CustomEvent('openPaymentModal', {
-            detail: { plan: planData }
-          }));
+          window.dispatchEvent(
+            new CustomEvent("openPaymentModal", {
+              detail: { plan: planData },
+            })
+          );
         } else {
           window.location.href = "/dashboard";
         }
       }, 500);
-
-    } catch (apiError) {
-      setError(apiError.message || "Login failed. Please try again.");
+    } catch (err) {
+      setError(err.message || "Login failed. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const [loading, setLoading] = useState(false);
+
+const handleForgotPassword = async () => {
+  if (loading) return; // prevent spam clicks
+
+  if (!forgotEmail) {
+    setForgotMsg("Please enter email");
+    return;
+  }
+
+  try {
+    setLoading(true);
+    setForgotMsg("Sending reset link...");
+
+    await forgotPassword(forgotEmail);
+
+    setForgotMsg("Reset link sent to your email.");
+  } catch (err) {
+    setForgotMsg(err.message || "Failed to send reset link");
+  } finally {
+    setLoading(false);
+  }
+};
 
   if (!isOpen) return null;
 
@@ -70,64 +104,100 @@ export default function LoginModal({ isOpen, onClose, switchToSignup, planData }
     <div className="modal-overlay">
       <div className="modal-box">
 
-        {/* CLOSE BUTTON */}
-        <button
-          className="close-btn"
-          onClick={onClose}
-          aria-label="Close login modal"
-          type="button"
-        >
+        {/* CLOSE */}
+        <button className="close-btn" onClick={onClose}>
           <FaTimes />
         </button>
 
         <h2>Welcome Back</h2>
         <p>Login to continue your preparation</p>
 
-        <form onSubmit={handleSubmit}>
+        {/* ================= LOGIN MODE ================= */}
+        {!forgotMode && (
+          <form onSubmit={handleSubmit}>
 
-          <input
-            type="email"
-            placeholder="Email"
-            value={form.email}
-            onChange={(e) => handleChange("email", e.target.value)}
-          />
-
-          <div className="password-field">
             <input
-              placeholder="Password"
-              type={showPassword ? "text" : "password"}
-              value={form.password}
-              onChange={(e) => handleChange("password", e.target.value)}
+              type="email"
+              placeholder="Email"
+              value={form.email}
+              onChange={(e) => handleChange("email", e.target.value)}
             />
-            <button
-              type="button"
-              className="password-toggle-btn"
-              onClick={() => setShowPassword(!showPassword)}
-              aria-label="Toggle password visibility"
+
+            <div className="password-field">
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Password"
+                value={form.password}
+                onChange={(e) => handleChange("password", e.target.value)}
+              />
+
+              <button
+                type="button"
+                className="password-toggle-btn"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff /> : <Eye />}
+              </button>
+            </div>
+
+            {error && <p className="auth-message auth-error">{error}</p>}
+            {success && <p className="auth-message auth-success">{success}</p>}
+
+            <p
+              style={{
+                textAlign: "right",
+                fontSize: "12px",
+                color: "#2563eb",
+                cursor: "pointer",
+                marginTop: "6px",
+              }}
+              onClick={() => setForgotMode(true)}
             >
-              {showPassword ? <EyeOff /> : <Eye />}
+              Forgot Password?
+            </p>
+
+            <button className="auth-btn" type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Logging In..." : "Login"}
             </button>
+
+          </form>
+        )}
+
+        {/* ================= FORGOT PASSWORD MODE ================= */}
+        {forgotMode && (
+          <div style={{ marginTop: "15px" }}>
+
+            <h3>Reset Password</h3>
+
+            <input
+              type="email"
+              placeholder="Enter your email"
+              value={forgotEmail}
+              onChange={(e) => setForgotEmail(e.target.value)}
+            />
+
+            <button className="auth-btn" onClick={handleForgotPassword}>
+              Send Reset Link
+            </button>
+
+            <p style={{ fontSize: "12px", marginTop: "10px" }}>
+              {forgotMsg}
+            </p>
+
+            <p
+              style={{
+                cursor: "pointer",
+                color: "red",
+                fontSize: "12px",
+                marginTop: "10px",
+              }}
+              onClick={() => setForgotMode(false)}
+            >
+              Back to Login
+            </p>
+
           </div>
-
-          {/* ERROR */}
-          {error && (
-            <p className="auth-message auth-error">{error}</p>
-          )}
-
-          {/* SUCCESS */}
-          {success && (
-            <p className="auth-message auth-success">{success}</p>
-          )}
-
-          <button
-            className="auth-btn"
-            type="submit"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? "Logging In..." : "Login"}
-          </button>
-
-        </form>
+        )}
 
         <p className="bottom-text">
           Don't have an account?{" "}

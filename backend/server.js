@@ -8,6 +8,9 @@ const rateLimit = require("express-rate-limit");
 const { body, validationResult, param } = require("express-validator");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const nodemailer = require("nodemailer");
+
+
 
 dotenv.config();
 
@@ -42,6 +45,7 @@ const allowedOrigins = [
   "http://localhost:5000",
   ...configuredOrigins
 ];
+
 
 app.use(
   cors({
@@ -107,6 +111,13 @@ const generalLimiter = rateLimit({
 });
 
 app.use(generalLimiter);
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
 
 // ============ JWT SECRET & TOKEN CONFIG ============
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString("hex");
@@ -680,6 +691,130 @@ app.post("/api/auth/refresh", [
   } catch (error) {
     console.error("Token refresh error:", error.message);
     return res.status(500).json({ message: "Token refresh failed" });
+  }
+});
+
+app.post("/api/auth/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email required" });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const emailKey = toEmailKey(normalizedEmail);
+
+    const emailSnap = await database.ref(`usersByEmail/${emailKey}`).get();
+
+    // security: same response always
+    if (!emailSnap.exists()) {
+      return res.status(200).json({
+        message: "If email exists, reset link sent"
+      });
+    }
+
+    const uid = emailSnap.val();
+
+    // token generate
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    console.log("===== FORGOT PASSWORD =====");
+console.log("Generated Token:", resetToken);
+    const expiry = Date.now() + 15 * 60 * 1000; // 15 min
+
+    // delete old token first (IMPORTANT FIX)
+await database.ref(`passwordReset/${uid}`).remove();
+
+await database.ref(`passwordReset/${uid}`).set({
+  token: resetToken,
+  expiry
+});
+
+const check = await database.ref(`passwordReset/${uid}`).get();
+
+console.log("Stored Token:", check.val().token);
+    const resetLink = `${process.env.FRONTEND_URL}/reset-password?uid=${uid}&token=${resetToken}`;
+
+    // SEND EMAIL
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: normalizedEmail,
+      subject: "Password Reset Request",
+      html: `
+        <h2>Password Reset</h2>
+        <p>Click below link to reset password (valid 15 min)</p>
+        <a href="${resetLink}" target="_blank">Reset Password</a>
+      `
+    });
+
+    return res.status(200).json({
+      message: "Reset email sent"
+    });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Failed to send reset email" });
+  }
+});
+app.post("/api/auth/reset-password", async (req, res) => {
+  try {
+    const { uid, token, newPassword } = req.body;
+
+    if (!uid || !token || !newPassword) {
+      return res.status(400).json({
+        message: "Missing required fields"
+      });
+    }
+
+    const snap = await database.ref(`passwordReset/${uid}`).get();
+
+    if (!snap.exists()) {
+      return res.status(400).json({
+        message: "Invalid or expired reset link"
+      });
+    }
+
+    const data = snap.val();
+    console.log("===== RESET PASSWORD =====");
+console.log("Received Token:", token);
+console.log("Database Token:", data.token);
+console.log("Equal:", token === data.token);
+
+    if (Date.now() > Number(data.expiry)) {
+      await database.ref(`passwordReset/${uid}`).remove();
+
+      return res.status(400).json({
+        message: "Reset link has expired"
+      });
+    }
+
+    if (token !== data.token) {
+      console.log("DB Token :", data.token);
+      console.log("User Token :", token);
+
+      return res.status(400).json({
+        message: "Invalid token"
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    await database.ref(`users/${uid}`).update({
+      passwordHash,
+      updatedAt: new Date().toISOString()
+    });
+
+    await database.ref(`passwordReset/${uid}`).remove();
+
+    return res.json({
+      message: "Password reset successful"
+    });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({
+      message: "Internal server error"
+    });
   }
 });
 

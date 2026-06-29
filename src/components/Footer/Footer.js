@@ -62,21 +62,69 @@ export default function Footer() {
                 <FaArrowRight /> Results
               </button>
             </li>
-          </ul>
-        </div>
-
-        {/* SUPPORT */}
-        <div className="footer-links">
-          <h3>Support</h3>
-          <ul>
-            <li><FaArrowRight /> Help Center</li>
-            <li><FaArrowRight /> Privacy Policy</li>
-            <li><FaArrowRight /> Terms</li>
             <li>
               <button type="button" onClick={() => handleNavigate("/contact")}> 
                 <FaArrowRight /> Contact
               </button>
             </li>
+          </ul>
+        </div>
+
+        {/* SUPPORT */}
+        <div className="footer-links">
+          <h3>POLICIES</h3>
+          <ul>
+          <li>
+  <FaArrowRight />
+  <a
+    href="/legal/PRIVACY POLICY.pdf"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+    Privacy Policy
+  </a>
+</li>
+<li>
+  <FaArrowRight />
+  <a
+    href="/legal/TERMS AND CONDITIONS.pdf"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+  TERMS AND CONDITIONS
+  </a>
+</li>
+<li>
+  <FaArrowRight />
+  <a
+    href="/legal/POLICY.pdf"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+  POLICIES
+  </a>
+</li>
+<li>
+  <FaArrowRight />
+  <a
+    href="/legal/REFUND POLICY.pdf"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+  REFUND POLICY
+  </a>
+</li>
+<li>
+  <FaArrowRight />
+  <a
+    href="/legal/DISCLAIMER POLICY.pdf"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+DISCLAIMER POLICY
+  </a>
+</li>
+            
           </ul>
         </div>
 

@@ -129,3 +129,21 @@
   .arrow:hover {
     background: #f1f5f9;
   }
+  .avatar-img {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-right: 10px;
+    border: 2px solid #e5e7eb;
+  }
+  
+  .user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .avatar {
+    display: none; /* hide old initial avatar */
+  }
