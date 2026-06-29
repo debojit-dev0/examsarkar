@@ -1,10 +1,7 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import axios from "axios";
 
 export default function ResetPassword() {
-  const [params] = useSearchParams();
-
   const uid = new URLSearchParams(window.location.search).get("uid");
   const token = new URLSearchParams(window.location.search).get("token");
   console.log("===== FRONTEND =====");
