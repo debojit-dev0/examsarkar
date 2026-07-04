@@ -27,9 +27,18 @@ import "./AdminPanelPage.css";
 const ROLE_SUPER_ADMIN = "super-admin";
 const ROLE_CONTENT_ADMIN = "content-admin";
 
+const PLAN_DAILY = "daily";
 const PLAN_WEEKLY = "weekly";
 const PLAN_MONTHLY = "monthly";
 const PLAN_FREE = "free";
+
+const SUBJECT_LABELS = {
+  gs: "GS / GE",
+  csat: "CSAT",
+  all: "All Access"
+};
+
+const subjectLabel = (subject) => SUBJECT_LABELS[subject] || (subject ? String(subject).toUpperCase() : "GS / GE");
 
 function normalizeDate(date) {
   const d = new Date(date);
@@ -60,9 +69,16 @@ async function getQuestionCountFromFile(file) {
   const extension = file.name.split(".").pop()?.toLowerCase();
 
   const normalizeSpace = (text) => String(text || "").replace(/\s+/g, " ").trim();
-  const isQuestionStart = (text) => /^Q\s*\d+\s*[.)]?\s*/i.test(text);
-  const optionMatch = (text) => text.match(/^([A-D])[.)]\s*(.+)$/i);
+  // A question can start as "Q1.", "Q. 1", "1.", "1)" or "(1)".
+  const isQuestionStart = (text) => /^\(?(?:Q\s*\.?\s*)?\d+\s*[).:]\s+\S/i.test(text) || /^Q\s*\.?\s*\d+\b/i.test(text);
+  // Remove the leading "Q1." / "1)" / "(1)" numbering from a stored stem.
+  const stripLeadingNumber = (text) => text.replace(/^\(?(?:Q\s*\.?\s*)?\d+\s*[).:]\s*/i, "").trim();
+  // An option can be "(A) ...", "A. ..." or "A) ...".
+  const optionMatch = (text) => text.match(/^\(?([A-D])\s*[).]\s*(.+)$/i);
+  // A standalone answer key line: "Answer: (B)", "Ans - C", "Correct Answer: D".
+  const answerLineMatch = (text) => text.match(/^(?:ans(?:wer)?|correct\s*answer)\s*[:.\-)]*\s*\(?([A-D])\)?(?:[\s.):]|$)/i);
   const isYellowHighlight = (color) => String(color || "").toUpperCase().includes("FFFF00");
+  const letterToIndex = (letter) => letter.toUpperCase().charCodeAt(0) - 65;
 
   const buildParsedResult = (questions) => ({
     questionCount: questions.length,
@@ -72,11 +88,14 @@ async function getQuestionCountFromFile(file) {
   const finalizeQuestion = (draft, questions) => {
     if (!draft || draft.options.length < 2) return;
 
+    const stem = stripLeadingNumber(draft.questionLines.join(" ")).trim();
+    if (!stem) return;
+
     questions.push({
       id: questions.length + 1,
-      question: draft.questionLines.join(" "),
+      question: stem,
       options: draft.options,
-      answerIndex: draft.answerIndex
+      answerIndex: Number.isInteger(draft.answerIndex) ? draft.answerIndex : null
     });
   };
 
@@ -88,7 +107,31 @@ async function getQuestionCountFromFile(file) {
       const cleanText = normalizeSpace(text);
       if (!cleanText) return;
 
-      if (isQuestionStart(cleanText)) {
+      // Explicit "Answer: X" line resolves the current question and closes it.
+      const answerKey = answerLineMatch(cleanText);
+      if (answerKey && current && current.options.length >= 2) {
+        const index = letterToIndex(answerKey[1]);
+        if (index >= 0 && index < current.options.length) {
+          current.answerIndex = index;
+        }
+        finalizeQuestion(current, questions);
+        current = null;
+        return;
+      }
+
+      // An option only counts once a question stem is being built.
+      const option = current ? optionMatch(cleanText) : null;
+      if (option) {
+        current.options.push(option[2].trim());
+        if (isAnswer) {
+          current.answerIndex = current.options.length - 1;
+        }
+        return;
+      }
+
+      // A numbered line starts a new question only when we're not mid-stem;
+      // numbered sub-statements inside a stem (before any option) stay in the stem.
+      if (isQuestionStart(cleanText) && (!current || current.options.length > 0)) {
         finalizeQuestion(current, questions);
         current = {
           questionLines: [cleanText],
@@ -100,17 +143,7 @@ async function getQuestionCountFromFile(file) {
 
       if (!current) return;
 
-      const option = optionMatch(cleanText);
-      if (option) {
-        current.options.push(option[2]);
-
-        if (isAnswer) {
-          current.answerIndex = current.options.length - 1;
-        }
-
-        return;
-      }
-
+      // Additional stem text (including numbered sub-statements) before options.
       if (current.options.length === 0) {
         current.questionLines.push(cleanText);
       }
@@ -470,6 +503,7 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
   );
 
   const groupedTests = useMemo(() => {
+    const dailyCore = tests.filter((test) => test.type === "daily");
     const weeklyCore = tests.filter((test) => test.type === "weekly").slice(0, planSettings.weeklyLimit);
     const monthlyCore = tests.filter((test) => test.type === "monthly").slice(0, planSettings.monthlyLimit);
     const dailyQuiz = tests.filter((test) => test.type === "daily-quiz");
@@ -498,10 +532,12 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
     };
 
     return {
+      dailyCore,
       weeklyCore,
       monthlyCore,
       dailyQuiz,
       freeTests,
+      dailySet: uniqueById([...dailyCore, ...dailyQuiz]),
       weeklySet: uniqueById(weeklySet),
       monthlySet: uniqueById(monthlySet)
     };
@@ -545,6 +581,7 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
   }, [overviewStats.activeUsersThisWeek, overviewStats.activeUsersToday, overviewStats.totalAttempts, overviewStats.totalUsers, tests, users]);
 
   const visibleTestsForSelectedPlan = useMemo(() => {
+    if (selectedPlan === PLAN_DAILY) return groupedTests.dailySet;
     if (selectedPlan === PLAN_WEEKLY) return groupedTests.weeklySet;
     if (selectedPlan === PLAN_MONTHLY) return groupedTests.monthlySet;
     return groupedTests.freeTests;
@@ -782,8 +819,10 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
       const nextTests = [newTest, ...tests];
       const savedTests = await saveAdminTests(nextTests);
       setTests(savedTests);
+      const answeredCount = parsedQuestions.filter((q) => Number.isInteger(q.answerIndex)).length;
       setUploadFeedback(
-        `Uploaded successfully. ${newTest.testName} parsed ${questionCount} questions${parsedQuestions.length ? " with highlighted answers" : ""}.`
+        `Uploaded successfully. ${newTest.testName} parsed ${questionCount} questions` +
+          (answeredCount ? ` (${answeredCount} with answer keys).` : ".")
       );
 
       setFormState({
@@ -1354,6 +1393,7 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
             </ol>
 
             <div className="plan-tabs">
+              <button type="button" className={selectedPlan === PLAN_DAILY ? "tab-btn active" : "tab-btn"} onClick={() => setSelectedPlan(PLAN_DAILY)}>Daily</button>
               <button type="button" className={selectedPlan === PLAN_WEEKLY ? "tab-btn active" : "tab-btn"} onClick={() => setSelectedPlan(PLAN_WEEKLY)}>Weekly</button>
               <button type="button" className={selectedPlan === PLAN_MONTHLY ? "tab-btn active" : "tab-btn"} onClick={() => setSelectedPlan(PLAN_MONTHLY)}>Monthly</button>
               <button type="button" className={selectedPlan === PLAN_FREE ? "tab-btn active" : "tab-btn"} onClick={() => setSelectedPlan(PLAN_FREE)}>Free</button>
@@ -1368,7 +1408,7 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
                     <div>
                       <h4>{test.testName}</h4>
                       <p>
-                        Type: <strong>{test.type}</strong> | Access: <strong>{test.access}</strong>
+                        Type: <strong>{String(test.type || "").replace(/-/g, " ")}</strong> | Subject: <strong>{subjectLabel(test.subject)}</strong> | Access: <strong>{test.access}</strong>
                       </p>
                     </div>
                     <div className="meta-col">

@@ -213,7 +213,7 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
                       <span className="free-test-type">{String(test.type || "test").replace(/-/g, " ").toUpperCase()}</span>
                     </div>
                     <h3>{test.testName || test.title || "Untitled Test"}</h3>
-                    <p>{test.subject || test.planTag || "Uploaded free test"}</p>
+                    <p>{({ gs: "GS / GE", csat: "CSAT", all: "All Access" }[test.subject]) || test.planTag || "Uploaded free test"}</p>
                     <div className="free-test-meta">
                       <span>{test.questionCount || test.parsedQuestions?.length || 0} questions</span>
                       {test.date ? <span>{String(test.date).split("T")[0]}</span> : null}
