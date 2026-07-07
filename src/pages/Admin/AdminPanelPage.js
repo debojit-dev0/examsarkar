@@ -694,13 +694,8 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
   const handleFieldChange = (field, value) => {
     setFormState((prev) => ({ ...prev, [field]: value }));
 
-    if (field === "type") {
-      if (value === "daily-quiz") {
-        setFormState((prev) => ({ ...prev, type: value, access: "free" }));
-      }
-      if (value === "weekly" || value === "monthly" || value === "daily") {
-        setFormState((prev) => ({ ...prev, type: value, date: "" }));
-      }
+    if (field === "type" && value === "daily-quiz") {
+      setFormState((prev) => ({ ...prev, type: value, access: "free" }));
     }
   };
 
@@ -717,8 +712,8 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
       return;
     }
 
-    if (formState.type === "daily-quiz" && !formState.date) {
-      setUploadFeedback("Daily quiz requires a quiz date.");
+    if (!formState.date) {
+      setUploadFeedback("Paper date is required — it decides which day/week/month the paper belongs to for subscriber access.");
       return;
     }
 
@@ -800,7 +795,7 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
         type: formState.type,
         subject: formState.subject,
         access: formState.access,
-        date: formState.type === "daily-quiz" ? formState.date : "",
+        date: formState.date,
         questionCount,
         parsedQuestions,
         fileName: formState.file.name,
@@ -1113,12 +1108,11 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
               </label>
 
               <label>
-                Date (required for Daily Quiz)
+                Paper Date (required — sets which day this paper belongs to)
                 <input
                   type="date"
                   value={formState.date}
                   onChange={(event) => handleFieldChange("date", event.target.value)}
-                  disabled={formState.type !== "daily-quiz"}
                 />
               </label>
 

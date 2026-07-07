@@ -168,6 +168,42 @@ const getAllowedSubjects = (planSubject) => {
   return [planSubject, "all"];
 };
 
+// YYYY-MM-DD (UTC) day key for any date-ish value; null if unparseable.
+const toDayKey = (value) => {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().split("T")[0];
+};
+
+// Inclusive calendar access window anchored to the purchase date:
+//   daily   -> the purchase day only
+//   weekly  -> Sunday..Saturday of the purchase week
+//   monthly -> first..last day of the purchase month
+const getAccessWindow = (planPeriod, paidAt) => {
+  const base = new Date(paidAt);
+  if (Number.isNaN(base.getTime())) return null;
+  const y = base.getUTCFullYear();
+  const m = base.getUTCMonth();
+  const d = base.getUTCDate();
+
+  if (planPeriod === "weekly") {
+    const dow = base.getUTCDay(); // 0=Sun .. 6=Sat
+    return {
+      start: toDayKey(new Date(Date.UTC(y, m, d - dow))),
+      end: toDayKey(new Date(Date.UTC(y, m, d - dow + 6)))
+    };
+  }
+  if (planPeriod === "monthly") {
+    return {
+      start: toDayKey(new Date(Date.UTC(y, m, 1))),
+      end: toDayKey(new Date(Date.UTC(y, m + 1, 0)))
+    };
+  }
+  const day = toDayKey(base); // daily + fallback
+  return { start: day, end: day };
+};
+
 const getPurchasePlan = (purchase) => {
   const fromKey = parsePlanKey(purchase?.planKey);
   const planPeriod = fromKey.planPeriod;
@@ -187,41 +223,50 @@ const getPurchasePlan = (purchase) => {
     };
   }
 
-  const days = PLAN_DURATION_DAYS[planPeriod] ?? 1;
-  const expiresAt = paidAt
-    ? new Date(new Date(paidAt).getTime() + days * 24 * 60 * 60 * 1000).toISOString()
-    : null;
+  const accessWindow = paidAt ? getAccessWindow(planPeriod, paidAt) : null;
+  const expiresAt = accessWindow ? `${accessWindow.end}T23:59:59.999Z` : null;
   return {
     planPeriod,
     planSubject: fromKey.planSubject,
     planKey: buildPlanKey(planPeriod, fromKey.planSubject),
     planName: purchase?.planName || `${planPeriod[0].toUpperCase()}${planPeriod.slice(1)} ${fromKey.planSubject.toUpperCase()}`,
     paidAt,
-    expiresAt
+    expiresAt,
+    accessWindow
   };
 };
 
 const isPurchaseActive = (purchase) => {
   if (!purchase.paidAt) return false;
   const { planPeriod } = parsePlanKey(purchase.planKey);
-  const days = planPeriod === 'mains' ? 30 : (PLAN_DURATION_DAYS[planPeriod] ?? 1);
-  const expiresAt = new Date(new Date(purchase.paidAt).getTime() + days * 24 * 60 * 60 * 1000);
-  return new Date() < expiresAt;
+  if (planPeriod === 'mains') {
+    const expiresAt = new Date(new Date(purchase.paidAt).getTime() + 30 * 24 * 60 * 60 * 1000);
+    return new Date() < expiresAt;
+  }
+  const accessWindow = getAccessWindow(planPeriod, purchase.paidAt);
+  if (!accessWindow) return false;
+  // Active through the end of the last day in the purchase-anchored window.
+  const todayKey = toDayKey(new Date());
+  return Boolean(todayKey && todayKey <= accessWindow.end);
 };
 
 const testMatchesPurchase = (test, purchase) => {
   if (!test || !purchase) return false;
-
-  const testPeriod = getTestPeriod(test);
-  const testSubject = getTestSubject(test);
-  const allowedPeriods = getAllowedPeriods(purchase.planPeriod);
-  const allowedSubjects = getAllowedSubjects(purchase.planSubject);
-
   if (test.access === "free") return true;
-  if (!allowedPeriods.includes(testPeriod)) return false;
-  if (testSubject === "all") return true;
+  if (purchase.planPeriod === "mains") return false; // mains papers are served separately
 
-  return allowedSubjects.includes(testSubject);
+  // Subject gate: gs->gs, csat->csat, combo/all->both. Papers tagged "all" are open to any subject.
+  const testSubject = getTestSubject(test);
+  const allowedSubjects = getAllowedSubjects(purchase.planSubject);
+  if (testSubject !== "all" && !allowedSubjects.includes(testSubject)) return false;
+
+  // Date gate: the paper's day must fall inside the purchase-anchored calendar window.
+  const accessWindow = purchase.accessWindow || getAccessWindow(purchase.planPeriod, purchase.paidAt);
+  if (!accessWindow) return false;
+  const testDay = toDayKey(test.date || test.createdAt);
+  if (!testDay) return false;
+
+  return testDay >= accessWindow.start && testDay <= accessWindow.end;
 };
 
 // Admin accounts helpers
