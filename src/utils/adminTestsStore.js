@@ -1,3 +1,4 @@
+import { loadSupabasePapers } from "./supabasePapersStore";
 import { buildApiUrl } from "./apiBaseUrl";
 
 const LEGACY_STORAGE_KEY = "examSarkarAdminTests";
@@ -20,9 +21,9 @@ const request = async (path, method = "GET", payload, headers = {}) => {
     method,
     headers: {
       "Content-Type": "application/json",
-      ...headers
+      ...headers,
     },
-    body: payload ? JSON.stringify(payload) : undefined
+    body: payload ? JSON.stringify(payload) : undefined,
   });
 
   const body = await response.json().catch(() => ({}));
@@ -53,9 +54,11 @@ export async function loadAdminTests() {
         Authorization: `Bearer ${accessToken}`
       });
       const accessibleTests = Array.isArray(result.accessibleTests) ? result.accessibleTests : [];
-      if (accessibleTests.length > 0) {
-        return accessibleTests;
-      }
+      const accessWindow = result.accessWindow || null;
+
+      const supabasePapers = await loadSupabasePapers(accessWindow);
+      const merged = [...accessibleTests, ...supabasePapers];
+      if (merged.length > 0) return merged;
     }
 
     const publicResult = await request("/api/tests");
@@ -116,7 +119,6 @@ export function getLatestFreeDailyQuiz(tests) {
 
   if (dailyQuiz.length === 0) return null;
 
-  // Helper function to normalize date to YYYY-MM-DD
   const normalizeDate = (dateStr) => {
     if (!dateStr) return null;
     const dateObj = new Date(dateStr);
@@ -124,11 +126,9 @@ export function getLatestFreeDailyQuiz(tests) {
     return dateObj.toISOString().split("T")[0];
   };
 
-  // Get today's date in YYYY-MM-DD format
   const today = new Date();
   const todayDate = today.toISOString().split("T")[0];
 
-  // Only return quiz if it's for TODAY's date
   const todayQuiz = dailyQuiz.find((test) => {
     const testDate = test.date || test.createdAt;
     const normalizedTestDate = normalizeDate(testDate);
@@ -140,7 +140,6 @@ export function getLatestFreeDailyQuiz(tests) {
     return todayQuiz;
   }
 
-  // No quiz for today - return null (will show "No daily quiz uploaded yet")
   console.log("[Daily Quiz] No quiz uploaded for today:", todayDate);
   return null;
 }
