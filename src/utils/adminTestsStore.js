@@ -54,7 +54,7 @@ export async function loadAdminTests() {
         Authorization: `Bearer ${accessToken}`
       });
       const accessibleTests = Array.isArray(result.accessibleTests) ? result.accessibleTests : [];
-      const accessWindow = result.accessWindow || null;
+      const accessWindow = result.accessWindow || result.purchasedPlans?.[0]?.accessWindow || null;
 
       const supabasePapers = await loadSupabasePapers(accessWindow);
       const merged = [...accessibleTests, ...supabasePapers];
