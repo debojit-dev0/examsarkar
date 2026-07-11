@@ -7,7 +7,7 @@ import Navbar from "../../components/Navbar/Navbar";
 import { useNavigate } from 'react-router-dom';
 import { loadPendingAttempts, loadRecentQuizActivity, mergeRecentQuizActivity, removeRecentQuizActivity, saveRecentQuizActivity, setPendingAttempts } from '../../utils/recentQuizActivityStore';
 import { useSEO } from '../../hooks/useSEO';
-
+import { loadSupabasePapers } from '../../utils/supabasePapersStore';
 const MAINS_SUBJECT_INFO = {
   gs1: { label: 'GS Paper I', icon: '📜', color: '#ff6b6b', sub: 'History • Geography • Society' },
   gs2: { label: 'GS Paper II', icon: '⚖️', color: '#4dabf7', sub: 'Polity • Governance • IR' },
@@ -301,12 +301,23 @@ const Dashboard = () => {
           }));
         }
 
-        if (testsRes?.ok) {
+       if (testsRes?.ok) {
           const testsJson = await testsRes.json();
+          const purchasedPlans = Array.isArray(testsJson.purchasedPlans) ? testsJson.purchasedPlans : [];
+          const accessibleTests = Array.isArray(testsJson.accessibleTests) ? testsJson.accessibleTests : [];
+
+          const accessWindow = testsJson.accessWindow || purchasedPlans?.[0]?.accessWindow || null;
+          let supabasePapers = [];
+          try {
+            supabasePapers = await loadSupabasePapers(accessWindow);
+          } catch (supabaseErr) {
+            console.error('Failed to load Supabase papers:', supabaseErr);
+          }
+
           setPurchaseData({
             loading: false,
-            purchasedPlans: Array.isArray(testsJson.purchasedPlans) ? testsJson.purchasedPlans : [],
-            accessibleTests: Array.isArray(testsJson.accessibleTests) ? testsJson.accessibleTests : []
+            purchasedPlans,
+            accessibleTests: [...accessibleTests, ...supabasePapers]
           });
         } else {
           setPurchaseData({ loading: false, purchasedPlans: [], accessibleTests: [] });
