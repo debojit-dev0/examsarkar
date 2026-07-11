@@ -1,6 +1,7 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { loadAdminTests } from "../../utils/adminTestsStore";
+import { getSupabasePaperById } from '../../utils/supabasePapersStore';
 import { buildApiUrl } from "../../utils/apiBaseUrl";
 import Navbar from "../../components/Navbar/Navbar";
 import "./TestPage.css";
@@ -41,6 +42,32 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
 
         if (foundTest) {
           setTest(foundTest);
+          setError(null);
+          setVisitedQuestions({ 0: true });
+          setLoading(false);
+          return;
+        }
+        // Fallback: try fetching directly from Supabase by ID
+        const supabasePaper = await getSupabasePaperById(testId);
+        if (supabasePaper) {
+          setTest({
+            id: supabasePaper.id,
+            testName: `${supabasePaper.paper_type} — ${supabasePaper.paper_date}`,
+            title: `${supabasePaper.paper_type} — ${supabasePaper.paper_date}`,
+            type: supabasePaper.section === 'Prelims' ? 'prelims' : 'mains',
+            subject: supabasePaper.paper_type,
+            access: 'premium',
+            date: supabasePaper.paper_date,
+            paper_date: supabasePaper.paper_date,
+            paper_type: supabasePaper.paper_type,
+            section: supabasePaper.section,
+            content: supabasePaper.content,
+            notes_content: supabasePaper.notes_content,
+            month: supabasePaper.month,
+            year: supabasePaper.year,
+            status: supabasePaper.status,
+            source: 'supabase'
+          });
           setError(null);
           setVisitedQuestions({ 0: true });
           setLoading(false);
