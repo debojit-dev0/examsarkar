@@ -965,7 +965,34 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
     );
   }
 
-  // Test Taking Mode
+  // Safety guard — if content could not be parsed, show a clear message instead of crashing
+  if (!test.parsedQuestions || test.parsedQuestions.length === 0) {
+    return (
+      <>
+        <Navbar
+          onHomeClick={() => navigate("/")}
+          onPlansClick={() => navigate("/test-series")}
+          onLoginClick={onLoginClick}
+          onSignupClick={onSignupClick}
+        />
+        <div className="test-page">
+          <div className="test-content-wrapper">
+            <main className="test-content-centered" style={{ textAlign: 'center', padding: '3rem 2rem' }}>
+              <h2 style={{ marginBottom: '1rem' }}>Questions could not be loaded</h2>
+              <p style={{ color: '#666', marginBottom: '2rem' }}>
+                This paper's content is in an unrecognised format or is not yet available.
+              </p>
+              <button className="back-btn" onClick={() => navigate("/dashboard")}>
+                Back to Dashboard
+              </button>
+            </main>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+// Test Taking Mode
   const question = test.parsedQuestions[currentQuestion];
   const stats = calculateStats();
   const questionCount = test.parsedQuestions.length;
