@@ -68,26 +68,26 @@ export const parseContentToQuestions = (content) => {
     for (const line of lines) {
       if (!line || line === '---') continue;
 
-      const qMatch = line.match(/^Q\d+\.\s+(.+)/);
+      const qMatch = line.match(/^(?:Q\s*)?(\d+)[.)]\s+(.+)/i);
       if (qMatch) {
         if (currentQ && currentQ.options.length >= 2) questions.push(currentQ);
-        currentQ = { question: qMatch[1], options: [], answerIndex: 0 };
+        currentQ = { question: qMatch[2], options: [], answerIndex: 0 };
         parsingOptions = false;
         continue;
       }
 
       if (!currentQ) continue;
 
-      const optMatch = line.match(/^\(([A-D])\)\s+(.+)/);
+      const optMatch = line.match(/^\(([A-Da-d])\)\s+(.+)/) || line.match(/^([A-Da-d])\)\s+(.+)/);
       if (optMatch) {
         currentQ.options.push(optMatch[2]);
         parsingOptions = true;
         continue;
       }
 
-      const ansMatch = line.match(/^ANSWER:\s*\(([A-D])\)/);
+      const ansMatch = line.match(/^(?:ANSWER|Answer|Ans|Correct\s*Answer)\s*[:\-]\s*\(?([A-Da-d])\)?/i);
       if (ansMatch) {
-        currentQ.answerIndex = ['A', 'B', 'C', 'D'].indexOf(ansMatch[1]);
+        currentQ.answerIndex = ['A', 'B', 'C', 'D'].indexOf(ansMatch[1].toUpperCase());
         parsingOptions = false;
         continue;
       }
