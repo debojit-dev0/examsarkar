@@ -57,3 +57,53 @@ export const getSupabasePaperById = async (paperId) => {
     return null;
   }
 };
+export const parseContentToQuestions = (content) => {
+  if (!content || typeof content !== 'string') return [];
+  try {
+    const questions = [];
+    const lines = content.split('\n').map(l => l.trim());
+    let currentQ = null;
+    let parsingOptions = false;
+
+    for (const line of lines) {
+      if (!line || line === '---') continue;
+
+      const qMatch = line.match(/^Q\d+\.\s+(.+)/);
+      if (qMatch) {
+        if (currentQ && currentQ.options.length >= 2) questions.push(currentQ);
+        currentQ = { question: qMatch[1], options: [], answerIndex: 0 };
+        parsingOptions = false;
+        continue;
+      }
+
+      if (!currentQ) continue;
+
+      const optMatch = line.match(/^\(([A-D])\)\s+(.+)/);
+      if (optMatch) {
+        currentQ.options.push(optMatch[2]);
+        parsingOptions = true;
+        continue;
+      }
+
+      const ansMatch = line.match(/^ANSWER:\s*\(([A-D])\)/);
+      if (ansMatch) {
+        currentQ.answerIndex = ['A', 'B', 'C', 'D'].indexOf(ansMatch[1]);
+        parsingOptions = false;
+        continue;
+      }
+
+      if (!parsingOptions &&
+          !line.startsWith('ExamSarkar') &&
+          !line.startsWith('Answer Distribution') &&
+          !line.startsWith('Total Questions')) {
+        currentQ.question += '\n' + line;
+      }
+    }
+
+    if (currentQ && currentQ.options.length >= 2) questions.push(currentQ);
+    return questions;
+  } catch (e) {
+    console.error('Failed to parse content:', e);
+    return [];
+  }
+};
