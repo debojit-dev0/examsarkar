@@ -85,7 +85,7 @@ export const parseContentToQuestions = (content) => {
         continue;
       }
 
-      const ansMatch = line.match(/^(?:ANSWER|Answer|Ans|Correct\s*Answer)\s*[:\-]\s*\(?([A-Da-d])\)?/i);
+      const ansMatch = line.match(/^(?:ANSWER|Answer|Ans|Correct\s*Answer)\s*[-:]\s*\(?([A-Da-d])\)?/i);
       if (ansMatch) {
         currentQ.answerIndex = ['A', 'B', 'C', 'D'].indexOf(ansMatch[1].toUpperCase());
         parsingOptions = false;
