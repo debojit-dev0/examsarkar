@@ -1,7 +1,7 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { loadAdminTests } from "../../utils/adminTestsStore";
-import { getSupabasePaperById } from '../../utils/supabasePapersStore';
+import { getSupabasePaperById, parseContentToQuestions } from '../../utils/supabasePapersStore';
 import { buildApiUrl } from "../../utils/apiBaseUrl";
 import Navbar from "../../components/Navbar/Navbar";
 import "./TestPage.css";
@@ -66,7 +66,8 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
             month: supabasePaper.month,
             year: supabasePaper.year,
             status: supabasePaper.status,
-            source: 'supabase'
+            source: 'supabase',
+            parsedQuestions: parseContentToQuestions(supabasePaper.content)
           });
           setError(null);
           setVisitedQuestions({ 0: true });
