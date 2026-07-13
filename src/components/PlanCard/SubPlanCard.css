@@ -14,7 +14,7 @@
     box-shadow: 
       0 4px 20px rgba(0, 0, 0, 0.3),
       inset 0 1px rgba(255, 255, 255, 0.05);
-  
+
     transition: all 0.25s ease;
   }
   
@@ -63,7 +63,7 @@
     column-gap: 10px;
   
     font-size: 13.5px;
-    color: #cbd5f5;
+    color: #f9efef;;
   
     margin-bottom: 10px;
     line-height: 1.5;

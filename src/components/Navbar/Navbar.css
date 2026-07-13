@@ -13,8 +13,7 @@
   /* 🌊 LIGHT CLEAN BACKGROUND */
   background: linear-gradient(90deg, #f8fbff, #f3f7ff);
 
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-  border-radius: 6px;
+  border-radius: 0px;
   box-shadow: none;
 }
 
@@ -345,7 +344,9 @@
   }
 
   .navbar {
-    padding: 14px 20px;
+    border-bottom: none !important;
+    box-shadow: none !important;
+    outline: none !important;
   }
 
   .profile-dropdown {

@@ -8,6 +8,8 @@ import {
   FiDollarSign,
   FiFileText,
   FiGrid,
+  FiImage,
+  FiLink,
   FiLock,
   FiEye,
   FiEdit3,
@@ -15,13 +17,21 @@ import {
   FiX,
   FiShield,
   FiUploadCloud,
+  FiSave,
   FiUsers,
   FiDownload,
   FiInbox
 } from "react-icons/fi";
 import JSZip from "jszip";
 import { buildApiUrl } from "../../utils/apiBaseUrl";
-import { getAdminSessionHeader, loadAdminOverview, loadAdminTests, saveAdminTests } from "../../utils/adminTestsStore";
+import {
+  getAdminSessionHeader,
+  loadAdminOverview,
+  loadAdminTests,
+  loadPrelimsBannerSlides,
+  saveAdminTests,
+  savePrelimsBannerSlides
+} from "../../utils/adminTestsStore";
 import "./AdminPanelPage.css";
 
 const ROLE_SUPER_ADMIN = "super-admin";
@@ -31,6 +41,30 @@ const PLAN_DAILY = "daily";
 const PLAN_WEEKLY = "weekly";
 const PLAN_MONTHLY = "monthly";
 const PLAN_FREE = "free";
+
+const DEFAULT_PRELIMS_BANNERS = [
+  {
+    id: "prelims-banner-1",
+    title: "AIR 1 Mindset",
+    subtitle: "Consistency beats talent when strategy is right",
+    imageUrl: "https://media.assettype.com/english-sentinelassam/import/h-upload/2022/08/18/375889-lbsnaa.webp?auto=format%2Ccompress&fit=max&w=1200",
+    link: "/test-series"
+  },
+  {
+    id: "prelims-banner-2",
+    title: "Daily Discipline",
+    subtitle: "Small tests. Daily improvement. Big results.",
+    imageUrl: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80",
+    link: "/test-series"
+  },
+  {
+    id: "prelims-banner-3",
+    title: "Built for UPSC",
+    subtitle: "Aligned with real exam pattern & pressure",
+    imageUrl: "https://images.unsplash.com/photo-1505666287802-931dc83a4c1b?auto=format&fit=crop&w=1200&q=80",
+    link: "/test-series"
+  }
+];
 
 const SUBJECT_LABELS = {
   gs: "GS / GE",
@@ -299,6 +333,10 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
     includeFreeTestsInMonthly: true
   });
 
+  const [bannerSlides, setBannerSlides] = useState(DEFAULT_PRELIMS_BANNERS);
+  const [bannerSaving, setBannerSaving] = useState(false);
+  const [bannerFeedback, setBannerFeedback] = useState("");
+
   const [tests, setTests] = useState([]);
   const [testsLoaded, setTestsLoaded] = useState(false);
 
@@ -369,6 +407,29 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
     };
 
     fetchTests();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const fetchBannerSlides = async () => {
+      try {
+        const slides = await loadPrelimsBannerSlides();
+        if (!isActive) return;
+        setBannerSlides(Array.isArray(slides) && slides.length > 0 ? slides : DEFAULT_PRELIMS_BANNERS);
+      } catch (error) {
+        console.error("Failed to load prelims banners:", error);
+        if (isActive) {
+          setBannerSlides(DEFAULT_PRELIMS_BANNERS);
+        }
+      }
+    };
+
+    fetchBannerSlides();
 
     return () => {
       isActive = false;
@@ -586,6 +647,34 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
     if (selectedPlan === PLAN_MONTHLY) return groupedTests.monthlySet;
     return groupedTests.freeTests;
   }, [selectedPlan, groupedTests]);
+
+  const updateBannerSlide = (slideIndex, field, value) => {
+    setBannerSlides((prev) => prev.map((slide, index) => (
+      index === slideIndex ? { ...slide, [field]: value } : slide
+    )));
+  };
+
+  const handleSaveBanners = async () => {
+    const invalidSlide = bannerSlides.find((slide) => !slide.title.trim() || !slide.subtitle.trim() || !slide.imageUrl.trim() || !slide.link.trim());
+    if (invalidSlide) {
+      setBannerFeedback("Each banner needs a title, subtitle, image URL, and link before saving.");
+      return;
+    }
+
+    setBannerSaving(true);
+    setBannerFeedback("Saving banner carousel...");
+
+    try {
+      const savedSlides = await savePrelimsBannerSlides(bannerSlides);
+      setBannerSlides(savedSlides);
+      setBannerFeedback("Homepage banners updated successfully.");
+    } catch (error) {
+      console.error("Failed to save prelims banners:", error);
+      setBannerFeedback(error.message || "Failed to save homepage banners.");
+    } finally {
+      setBannerSaving(false);
+    }
+  };
 
   const openTestReview = (testId) => {
     setReviewedTestId(testId);
@@ -997,6 +1086,116 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
             <h3>{dashboardMetrics.totalAttempts}</h3>
             <span><FiCheckCircle /> Aggregated from all tests</span>
           </article>
+        </section>
+
+        <section className="panel-card banner-editor-panel">
+          <div className="panel-title-row banner-editor-header">
+            <div>
+              <p className="eyebrow">Homepage content</p>
+              <h2><FiImage /> Prelims Banner Carousel</h2>
+              <p className="panel-description">
+                Edit the three public banners shown on the prelims page. Each slide supports a title, subtitle, image, and destination link.
+              </p>
+            </div>
+
+            <div className="banner-editor-actions">
+              <span className="panel-badge">Public page</span>
+              <button type="button" className="primary-btn banner-save-btn" onClick={handleSaveBanners} disabled={bannerSaving}>
+                <FiSave /> {bannerSaving ? "Saving..." : "Save Banners"}
+              </button>
+            </div>
+          </div>
+
+          {bannerFeedback ? <p className="banner-feedback">{bannerFeedback}</p> : null}
+
+          <div className="banner-editor-grid">
+            <div className="banner-editor-list">
+              {bannerSlides.map((slide, index) => (
+                <article className="banner-editor-card" key={slide.id || index}>
+                  <div className="banner-card-head">
+                    <div>
+                      <span className="banner-card-index">Slide {index + 1}</span>
+                      <h3>{slide.title || `Banner ${index + 1}`}</h3>
+                    </div>
+                    <span className="banner-card-pill">Visible</span>
+                  </div>
+
+                  <div className="banner-card-fields">
+                    <label>
+                      Title
+                      <input
+                        type="text"
+                        value={slide.title}
+                        onChange={(event) => updateBannerSlide(index, "title", event.target.value)}
+                        placeholder="Example: AIR 1 Mindset"
+                      />
+                    </label>
+
+                    <label>
+                      Subtitle
+                      <input
+                        type="text"
+                        value={slide.subtitle}
+                        onChange={(event) => updateBannerSlide(index, "subtitle", event.target.value)}
+                        placeholder="Example: Consistency beats talent when strategy is right"
+                      />
+                    </label>
+
+                    <label>
+                      Image URL
+                      <input
+                        type="url"
+                        value={slide.imageUrl}
+                        onChange={(event) => updateBannerSlide(index, "imageUrl", event.target.value)}
+                        placeholder="https://..."
+                      />
+                    </label>
+
+                    <label>
+                      Link
+                      <div className="inline-input-hint">
+                        <FiLink />
+                        <input
+                          type="text"
+                          value={slide.link}
+                          onChange={(event) => updateBannerSlide(index, "link", event.target.value)}
+                          placeholder="/test-series or https://..."
+                        />
+                      </div>
+                    </label>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <aside className="banner-preview-panel">
+              <div className="banner-preview-topline">
+                <span className="banner-preview-label">Live preview</span>
+                <span className="banner-preview-note">Matches the public prelims page</span>
+              </div>
+
+              <div className="banner-preview-hero" style={{ backgroundImage: `url(${bannerSlides[0]?.imageUrl || DEFAULT_PRELIMS_BANNERS[0].imageUrl})` }}>
+                <div className="banner-preview-overlay">
+                  <span className="banner-preview-kicker">Featured banner</span>
+                  <h3>{bannerSlides[0]?.title || DEFAULT_PRELIMS_BANNERS[0].title}</h3>
+                  <p>{bannerSlides[0]?.subtitle || DEFAULT_PRELIMS_BANNERS[0].subtitle}</p>
+                  <span className="banner-preview-chip">{bannerSlides[0]?.link || DEFAULT_PRELIMS_BANNERS[0].link}</span>
+                </div>
+              </div>
+
+              <div className="banner-preview-stack">
+                {bannerSlides.map((slide, index) => (
+                  <div className="banner-preview-row" key={slide.id || index}>
+                    <span className="banner-preview-index">0{index + 1}</span>
+                    <div>
+                      <strong>{slide.title || `Banner ${index + 1}`}</strong>
+                      <p>{slide.subtitle || "Add a subtitle for stronger conversion."}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </aside>
+          </div>
         </section>
 
         <section className="panel-card quiz-library-panel">

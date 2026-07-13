@@ -98,6 +98,7 @@
 }
 
 @media (max-width: 900px) {
+
   .archived-review-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -836,6 +837,7 @@
 
 .review-btn,
 .back-btn,
+.notes-btn,
 .finish-review-btn,
 .nav-btn {
   border: 0;
@@ -848,7 +850,7 @@
   position: relative;
   overflow: hidden;
 }
-
+.notes-btn,
 .review-btn,
 .finish-review-btn {
   background: linear-gradient(135deg, #0ea5e9, #00d4ff, #0284c7);

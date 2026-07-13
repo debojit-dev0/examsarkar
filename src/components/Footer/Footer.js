@@ -91,7 +91,7 @@ export default function Footer() {
     target="_blank"
     rel="noopener noreferrer"
   >
-  TERMS AND CONDITIONS
+  Terms and Conditions
   </a>
 </li>
 <li>
@@ -101,7 +101,7 @@ export default function Footer() {
     target="_blank"
     rel="noopener noreferrer"
   >
-  POLICIES
+  Policies
   </a>
 </li>
 <li>
@@ -111,7 +111,7 @@ export default function Footer() {
     target="_blank"
     rel="noopener noreferrer"
   >
-  REFUND POLICY
+  Refund Policy
   </a>
 </li>
 <li>
@@ -121,7 +121,7 @@ export default function Footer() {
     target="_blank"
     rel="noopener noreferrer"
   >
-DISCLAIMER POLICY
+Disclaimer policies
   </a>
 </li>
             

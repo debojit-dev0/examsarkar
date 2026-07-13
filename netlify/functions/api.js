@@ -73,6 +73,7 @@ const sha256 = (text) =>
   crypto.createHash("sha256").update(text || "").digest("hex");
 
 const ADMIN_TESTS_PATH = "adminTests";
+const PRELIMS_BANNER_SLIDES_PATH = "prelimsBannerSlides";
 const USER_PURCHASES_PATH = "userPurchases";
 const USER_TEST_ATTEMPTS_PATH = "userTestAttempts";
 
@@ -91,6 +92,26 @@ const VALID_MAINS_SUBJECTS = ['gs1', 'gs2', 'gs3', 'gs4', 'essay'];
 const normalizeList = (value) => {
   if (Array.isArray(value)) return value.filter(Boolean);
   if (value && typeof value === "object") return Object.values(value).filter(Boolean);
+  return [];
+};
+
+const normalizeBannerSlides = (value) => {
+  if (Array.isArray(value)) {
+    return value
+      .map((slide, index) => ({
+        id: String(slide?.id || `prelims-banner-${index + 1}`),
+        title: String(slide?.title || "").trim(),
+        subtitle: String(slide?.subtitle || "").trim(),
+        imageUrl: String(slide?.imageUrl || slide?.img || "").trim(),
+        link: String(slide?.link || "").trim()
+      }))
+      .filter((slide) => slide.title || slide.subtitle || slide.imageUrl || slide.link);
+  }
+
+  if (value && typeof value === "object") {
+    return normalizeBannerSlides(Object.values(value));
+  }
+
   return [];
 };
 
@@ -378,6 +399,16 @@ app.get("/api/tests", async (req, res) => {
   }
 });
 
+app.get("/api/prelims/banner-slides", async (req, res) => {
+  try {
+    const snapshot = await database.ref(PRELIMS_BANNER_SLIDES_PATH).get();
+    return res.status(200).json({ slides: normalizeBannerSlides(snapshot.val()) });
+  } catch (error) {
+    console.error("Public prelims banner fetch error:", error.message);
+    return res.status(500).json({ message: "Failed to load banners" });
+  }
+});
+
 app.get("/api/user/tests", verifyToken, async (req, res) => {
   try {
     const uid = req.user.uid;
@@ -447,6 +478,41 @@ app.put("/api/admin/tests", verifyAdminToken, async (req, res) => {
   } catch (error) {
     console.error("Save admin tests error:", error.message);
     return res.status(500).json({ message: "Failed to save tests" });
+  }
+});
+
+app.get("/api/admin/prelims/banner-slides", verifyAdminToken, async (req, res) => {
+  try {
+    const snapshot = await database.ref(PRELIMS_BANNER_SLIDES_PATH).get();
+    return res.status(200).json({ slides: normalizeBannerSlides(snapshot.val()) });
+  } catch (error) {
+    console.error("Load prelims banner error:", error.message);
+    return res.status(500).json({ message: "Failed to load banners" });
+  }
+});
+
+app.put("/api/admin/prelims/banner-slides", verifyAdminToken, async (req, res) => {
+  try {
+    const slides = Array.isArray(req.body?.slides) ? normalizeBannerSlides(req.body.slides) : null;
+    if (!slides || slides.length !== 3) {
+      return res.status(400).json({ message: "Exactly 3 banners are required" });
+    }
+
+    for (const slide of slides) {
+      if (!slide.title || !slide.subtitle || !slide.imageUrl || !slide.link) {
+        return res.status(400).json({ message: "Each banner needs a title, subtitle, image URL, and link" });
+      }
+    }
+
+    await database.ref(PRELIMS_BANNER_SLIDES_PATH).set(slides.map((slide, index) => ({
+      ...slide,
+      id: slide.id || `prelims-banner-${index + 1}`
+    })));
+
+    return res.status(200).json({ slides });
+  } catch (error) {
+    console.error("Save prelims banner error:", error.message);
+    return res.status(500).json({ message: "Failed to save banners" });
   }
 });
 
