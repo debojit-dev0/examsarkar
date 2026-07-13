@@ -831,6 +831,10 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
               >
                 Back to Tests
               </button>
+              <button
+                className="notes-btn">
+                Download Notes
+              </button>
             </div>
           </div>
         </div>

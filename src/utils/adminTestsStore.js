@@ -2,6 +2,46 @@ import { loadSupabasePapers } from "./supabasePapersStore";
 import { buildApiUrl } from "./apiBaseUrl";
 
 const LEGACY_STORAGE_KEY = "examSarkarAdminTests";
+const DEFAULT_BANNER_COUNT = 3;
+
+const DEFAULT_PRELIMS_BANNERS = [
+  {
+    id: "prelims-banner-1",
+    title: "AIR 1 Mindset",
+    subtitle: "Consistency beats talent when strategy is right",
+    imageUrl: "https://media.assettype.com/english-sentinelassam/import/h-upload/2022/08/18/375889-lbsnaa.webp?auto=format%2Ccompress&fit=max&w=1200",
+    link: "/test-series"
+  },
+  {
+    id: "prelims-banner-2",
+    title: "Daily Discipline",
+    subtitle: "Small tests. Daily improvement. Big results.",
+    imageUrl: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80",
+    link: "/test-series"
+  },
+  {
+    id: "prelims-banner-3",
+    title: "Built for UPSC",
+    subtitle: "Aligned with real exam pattern & pressure",
+    imageUrl: "https://images.unsplash.com/photo-1505666287802-931dc83a4c1b?auto=format&fit=crop&w=1200&q=80",
+    link: "/test-series"
+  }
+];
+
+const normalizeBannerSlides = (slides) => {
+  const list = Array.isArray(slides) ? slides : [];
+
+  return Array.from({ length: DEFAULT_BANNER_COUNT }, (_, index) => {
+    const source = list[index] || DEFAULT_PRELIMS_BANNERS[index];
+    return {
+      id: String(source?.id || `prelims-banner-${index + 1}`),
+      title: String(source?.title || DEFAULT_PRELIMS_BANNERS[index].title || "").trim(),
+      subtitle: String(source?.subtitle || DEFAULT_PRELIMS_BANNERS[index].subtitle || "").trim(),
+      imageUrl: String(source?.imageUrl || source?.img || DEFAULT_PRELIMS_BANNERS[index].imageUrl || "").trim(),
+      link: String(source?.link || DEFAULT_PRELIMS_BANNERS[index].link || "/test-series").trim()
+    };
+  });
+};
 
 const getAdminSessionHeader = () => {
   try {
@@ -97,6 +137,30 @@ export async function loadAdminOverview() {
     console.error("Failed to load admin overview:", error);
     return null;
   }
+}
+
+export async function loadPrelimsBannerSlides() {
+  try {
+    const result = await request("/api/prelims/banner-slides");
+    return normalizeBannerSlides(Array.isArray(result.slides) ? result.slides : []);
+  } catch (error) {
+    console.error("Failed to load prelims banner slides:", error);
+    return normalizeBannerSlides([]);
+  }
+}
+
+export async function savePrelimsBannerSlides(slides) {
+  const adminSession = getAdminSessionHeader();
+  if (!adminSession) {
+    throw new Error("Admin session required to save banners.");
+  }
+
+  const normalizedSlides = normalizeBannerSlides(slides);
+  const result = await request("/api/admin/prelims/banner-slides", "PUT", { slides: normalizedSlides }, {
+    "x-admin-session": adminSession
+  });
+
+  return normalizeBannerSlides(Array.isArray(result.slides) ? result.slides : normalizedSlides);
 }
 
 export async function saveAdminTests(tests) {
