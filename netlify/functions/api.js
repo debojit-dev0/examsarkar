@@ -82,7 +82,7 @@ const PLAN_PRICES = {
   'daily:gs': 9900, 'daily:csat': 9900, 'daily:combo': 14900, 'daily:all': 9900,
   'weekly:gs': 59900, 'weekly:csat': 59900, 'weekly:combo': 99900, 'weekly:all': 59900,
   'monthly:gs': 149900, 'monthly:csat': 149900, 'monthly:combo': 249900, 'monthly:all': 149900,
-  'mains:gs1': 9000, 'mains:gs2': 9000, 'mains:gs3': 9000, 'mains:gs4': 9000, 'mains:essay': 9000
+  'mains:gs1': 9900, 'mains:gs2': 9900, 'mains:gs3': 9900, 'mains:gs4': 9900, 'mains:essay': 9900
 };
 const MAINS_PAPERS_PATH = "mainsPapers";
 const USER_MAINS_ANSWERS_PATH = "userMainsAnswers";
