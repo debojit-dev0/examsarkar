@@ -97,7 +97,18 @@ export async function loadAdminTests() {
       const accessWindow = result.accessWindow || result.purchasedPlans?.[0]?.accessWindow || null;
 
       const supabasePapers = await loadSupabasePapers(accessWindow);
-      const merged = [...accessibleTests, ...supabasePapers];
+
+      let scholarshipTest = null;
+      try {
+        const scholarshipResult = await request("/api/scholarship/my-test", "GET", undefined, {
+          Authorization: `Bearer ${accessToken}`
+        });
+        scholarshipTest = scholarshipResult?.test || null;
+      } catch (scholarshipError) {
+        console.error("Failed to load Scholarship Test:", scholarshipError);
+      }
+
+      const merged = [...accessibleTests, ...supabasePapers, ...(scholarshipTest ? [scholarshipTest] : [])];
       if (merged.length > 0) return merged;
     }
 
