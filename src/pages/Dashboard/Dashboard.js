@@ -4,6 +4,7 @@ import './Dashboard.css';
 import { buildApiUrl } from '../../utils/apiBaseUrl';
 import { fetchWithErrorHandling } from '../../utils/apiErrorHandler';
 import Navbar from "../../components/Navbar/Navbar";
+import ScholarshipTest from "../../components/ScholarshipTest/ScholarshipTest";
 import { useNavigate } from 'react-router-dom';
 import { loadPendingAttempts, loadRecentQuizActivity, mergeRecentQuizActivity, removeRecentQuizActivity, saveRecentQuizActivity, setPendingAttempts } from '../../utils/recentQuizActivityStore';
 import { useSEO } from '../../hooks/useSEO';
@@ -784,6 +785,10 @@ const Dashboard = () => {
             <button className="challenge-button" onClick={handleNavigateToTest}>
               Attempt Now <ChevronRight size={20} />
             </button>
+          </div>
+            {/* Scholarship Test */}
+          <div className="explore-section" style={{ marginTop: '24px' }}>
+            <ScholarshipTest />
           </div>
         </div>
 
