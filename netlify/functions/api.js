@@ -88,7 +88,41 @@ const MAINS_PAPERS_PATH = "mainsPapers";
 const USER_MAINS_ANSWERS_PATH = "userMainsAnswers";
 const USER_MAINS_ACCESS_PATH = "userMainsAccess";
 const VALID_MAINS_SUBJECTS = ['gs1', 'gs2', 'gs3', 'gs4', 'essay'];
+// ============ SCHOLARSHIP TEST — CONSTANTS & HELPERS ============
+const SCHOLARSHIP_TESTS_PATH = "scholarshipTests";             // { [weekKey]: { title, parsedQuestions, config, uploadedAt, uploadedBy } }
+const SCHOLARSHIP_SLOTS_PATH = "scholarshipSlots";             // { [weekKey]: { count } }
+const SCHOLARSHIP_ENTRIES_PATH = "scholarshipEntries";         // { [weekKey]: { [uid]: { orderId, paymentId, paidAt } } }
+const SCHOLARSHIP_LEADERBOARD_PATH = "scholarshipLeaderboard"; // { [weekKey]: { [uid]: { uid, name, score, correct, total, timeTakenSeconds, submittedAt, attemptId } } }
+const SCHOLARSHIP_PRIZES_PATH = "scholarshipPrizes";           // { [weekKey]: { first, second, third, updatedAt, updatedBy } }
 
+const SCHOLARSHIP_ENTRY_FEE_PAISE = 9900; // ₹99
+const SCHOLARSHIP_MAX_SLOTS = 1000000;    // 10,00,000 per week
+
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+const toISTShifted = (date) => new Date(date.getTime() + IST_OFFSET_MS);
+
+// Sunday date (as seen in IST, "YYYY-MM-DD") that the current scholarship cycle belongs to.
+// Mon-Sat -> upcoming Sunday. Sunday itself (all day, until IST midnight) -> today.
+// This is the single source of truth for weekly reset — no cron job needed.
+const getScholarshipWeekKey = (now = new Date()) => {
+  const ist = toISTShifted(now);
+  const day = ist.getUTCDay(); // 0 = Sunday, using UTC getters on the IST-shifted date
+  const daysUntilSunday = day === 0 ? 0 : 7 - day;
+  const y = ist.getUTCFullYear();
+  const m = ist.getUTCMonth();
+  const d = ist.getUTCDate();
+  const sunday = new Date(Date.UTC(y, m, d + daysUntilSunday));
+  return sunday.toISOString().split("T")[0];
+};
+
+// 9:00 AM IST on the given Sunday weekKey, expressed as a UTC ISO string (= 03:30 UTC)
+const getScholarshipTestStartUTC = (weekKey) => `${weekKey}T03:30:00.000Z`;
+
+// Whether new entries (₹99 payment) are still being accepted for this weekKey
+const isScholarshipEntryOpen = (weekKey) =>
+  Date.now() < new Date(getScholarshipTestStartUTC(weekKey)).getTime();
+
+const scholarshipTestId = (weekKey) => `scholarship-${weekKey}`;
 const normalizeList = (value) => {
   if (Array.isArray(value)) return value.filter(Boolean);
   if (value && typeof value === "object") return Object.values(value).filter(Boolean);
@@ -366,6 +400,22 @@ const verifyToken = async (req, res, next) => {
     console.error("Token verification error:", error);
     return res.status(401).json({ message: "Invalid token." });
   }
+};
+// Like verifyToken, but never blocks the request — just attaches req.user if a valid token is present.
+const optionalVerifyToken = (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.substring(7);
+      const tokenData = jwt.verify(token, JWT_SECRET);
+      if (tokenData.type === "access") {
+        req.user = tokenData;
+      }
+    }
+  } catch {
+    // ignore invalid/expired token — treat as anonymous
+  }
+  next();
 };
 
 // Health check
@@ -1082,7 +1132,7 @@ app.post(
         return res.status(400).json({ message: "Invalid attempt payload" });
       }
 
-      const { uid, email } = req.user;
+      const { uid, email, firstName, lastName } = req.user;
       const {
         testId,
         testName,
@@ -1096,8 +1146,28 @@ app.post(
         analysis,
         answers,
         markedForReview,
-        questionsSnapshot
+        questionsSnapshot,
+        timeTakenSeconds
       } = req.body;
+
+      // Scholarship test guard — check BEFORE saving, so a duplicate/unauthorized
+      // submission never gets recorded at all.
+      const scholarshipMatch = /^scholarship-(\d{4}-\d{2}-\d{2})$/.exec(String(testId || ""));
+      const scholarshipWeekKey = scholarshipMatch ? scholarshipMatch[1] : null;
+
+      if (scholarshipWeekKey) {
+        const [entrySnapshot, existingLeaderboardSnapshot] = await Promise.all([
+          database.ref(`${SCHOLARSHIP_ENTRIES_PATH}/${scholarshipWeekKey}/${uid}`).get(),
+          database.ref(`${SCHOLARSHIP_LEADERBOARD_PATH}/${scholarshipWeekKey}/${uid}`).get()
+        ]);
+
+        if (!entrySnapshot.exists()) {
+          return res.status(403).json({ message: "No confirmed entry found for this week's Scholarship Test." });
+        }
+        if (existingLeaderboardSnapshot.exists()) {
+          return res.status(409).json({ message: "You've already submitted this week's Scholarship Test." });
+        }
+      }
 
       const submittedAt = new Date().toISOString();
       const attemptId = crypto.randomUUID();
@@ -1132,6 +1202,20 @@ app.post(
 
       await database.ref(`${USER_TEST_ATTEMPTS_PATH}/${uid}/${attemptId}`).set(attemptRecord);
 
+      if (scholarshipWeekKey) {
+        const displayName = `${firstName || ""} ${lastName || ""}`.trim() || email || "User";
+        await database.ref(`${SCHOLARSHIP_LEADERBOARD_PATH}/${scholarshipWeekKey}/${uid}`).set({
+          uid,
+          name: displayName,
+          score: Number(score),
+          correct: Number(correct),
+          total: Number(total),
+          timeTakenSeconds: Number(timeTakenSeconds || 0),
+          submittedAt,
+          attemptId
+        });
+      }
+
       return res.status(201).json({
         message: "Test attempt saved",
         attemptId,
@@ -1143,7 +1227,6 @@ app.post(
     }
   }
 );
-
 app.get(
   "/api/user/test-attempts/:attemptId",
   verifyToken,
@@ -1806,6 +1889,357 @@ app.get("/api/admin/mains/answers/:subject/:uid", verifyAdminToken, async (req, 
   } catch (error) {
     console.error("Admin answer download error:", error.message);
     return res.status(500).json({ message: "Failed to load answer sheet" });
+  }
+});
+// ============ SCHOLARSHIP TEST ENDPOINTS ============
+
+// Public status — entry fee, slots filled, countdown target, whether this user has already entered
+app.get("/api/scholarship/status", optionalVerifyToken, async (req, res) => {
+  try {
+    const weekKey = getScholarshipWeekKey();
+    const [slotsSnapshot, testSnapshot, entrySnapshot] = await Promise.all([
+      database.ref(`${SCHOLARSHIP_SLOTS_PATH}/${weekKey}/count`).get(),
+      database.ref(`${SCHOLARSHIP_TESTS_PATH}/${weekKey}`).get(),
+      req.user ? database.ref(`${SCHOLARSHIP_ENTRIES_PATH}/${weekKey}/${req.user.uid}`).get() : Promise.resolve(null)
+    ]);
+
+    const slotsFilled = Number(slotsSnapshot.val() || 0);
+    const testExists = testSnapshot.exists();
+    const entryOpen = isScholarshipEntryOpen(weekKey) && testExists && slotsFilled < SCHOLARSHIP_MAX_SLOTS;
+    const hasEntered = Boolean(entrySnapshot && entrySnapshot.exists());
+
+    return res.status(200).json({
+      weekKey,
+      entryFeeRupees: SCHOLARSHIP_ENTRY_FEE_PAISE / 100,
+      slotsFilled,
+      slotsTotal: SCHOLARSHIP_MAX_SLOTS,
+      testStartAt: getScholarshipTestStartUTC(weekKey),
+      testExists,
+      entryOpen,
+      hasEntered
+    });
+  } catch (error) {
+    console.error("Scholarship status error:", error.message);
+    return res.status(500).json({ message: "Failed to load scholarship status" });
+  }
+});
+
+// Create Razorpay order + atomically reserve a slot
+app.post("/api/scholarship/create-order", verifyToken, async (req, res) => {
+  try {
+    const razorpay = getRazorpayClient();
+    if (!razorpay) {
+      return res.status(503).json({ message: "Payment service unavailable" });
+    }
+
+    const uid = req.user.uid;
+    const weekKey = getScholarshipWeekKey();
+
+    if (!isScholarshipEntryOpen(weekKey)) {
+      return res.status(400).json({ message: "Entry for this week's Scholarship Test is closed." });
+    }
+
+    const testSnapshot = await database.ref(`${SCHOLARSHIP_TESTS_PATH}/${weekKey}`).get();
+    if (!testSnapshot.exists()) {
+      return res.status(400).json({ message: "This week's Scholarship Test hasn't been published yet." });
+    }
+
+    const existingEntry = await database.ref(`${SCHOLARSHIP_ENTRIES_PATH}/${weekKey}/${uid}`).get();
+    if (existingEntry.exists()) {
+      return res.status(400).json({ message: "You have already entered this week's Scholarship Test." });
+    }
+
+    // Atomically reserve a slot — aborts (returns undefined) if the cap is already hit
+    const slotsRef = database.ref(`${SCHOLARSHIP_SLOTS_PATH}/${weekKey}/count`);
+    const txResult = await slotsRef.transaction((current) => {
+      const count = Number(current || 0);
+      if (count >= SCHOLARSHIP_MAX_SLOTS) return; // abort transaction
+      return count + 1;
+    });
+
+    if (!txResult.committed) {
+      return res.status(409).json({ message: "All 10,00,000 slots for this week are full." });
+    }
+
+    const shortUid = uid.replace(/-/g, "").slice(0, 12);
+    const ts = String(Date.now()).slice(-6);
+    const receipt = `schol_${shortUid}_${ts}`;
+
+    let order;
+    try {
+      order = await razorpay.orders.create({
+        amount: SCHOLARSHIP_ENTRY_FEE_PAISE,
+        currency: "INR",
+        receipt,
+        payment_capture: 1,
+        notes: { scholarshipWeekKey: weekKey, uid }
+      });
+    } catch (orderError) {
+      // Release the reserved slot if order creation failed
+      await slotsRef.transaction((current) => Math.max(Number(current || 0) - 1, 0));
+      throw orderError;
+    }
+
+    await database.ref(`payments/${order.id}`).set({
+      uid,
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      receipt: order.receipt,
+      planKey: "scholarship:weekly",
+      planName: `Scholarship Test Entry — ${weekKey}`,
+      scholarshipWeekKey: weekKey,
+      status: "created",
+      createdAt: new Date().toISOString()
+    });
+
+    await database.ref(`userPayments/${uid}/${order.id}`).set({
+      status: "created",
+      createdAt: new Date().toISOString(),
+      planKey: "scholarship:weekly",
+      planName: `Scholarship Test Entry — ${weekKey}`
+    });
+
+    return res.status(201).json({
+      message: "Order created",
+      order,
+      key_id: process.env.RAZORPAY_KEY_ID
+    });
+  } catch (error) {
+    console.error("Scholarship create-order error:", error.message);
+    return res.status(500).json({ message: "Failed to create scholarship order" });
+  }
+});
+
+// Verify payment + confirm entry
+app.post("/api/scholarship/verify", verifyToken, async (req, res) => {
+  try {
+    const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body || {};
+    if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
+      return res.status(400).json({ message: "Missing payment details." });
+    }
+
+    const generated_signature = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || '')
+      .update(razorpay_order_id + "|" + razorpay_payment_id)
+      .digest('hex');
+
+    if (generated_signature !== razorpay_signature) {
+      return res.status(400).json({ message: "Invalid signature." });
+    }
+
+    const paymentRef = database.ref(`payments/${razorpay_order_id}`);
+    const paymentSnapshot = await paymentRef.get();
+    const record = paymentSnapshot.val();
+
+    if (!record || record.uid !== req.user.uid || !record.scholarshipWeekKey) {
+      return res.status(400).json({ message: "Payment record not found for this scholarship order." });
+    }
+
+    const paidAt = new Date().toISOString();
+    await paymentRef.update({ status: "paid", paymentId: razorpay_payment_id, paidAt });
+
+    const { uid, scholarshipWeekKey: weekKey, planName } = record;
+
+    await database.ref(`userPayments/${uid}/${razorpay_order_id}`).update({
+      status: "paid",
+      paymentId: razorpay_payment_id,
+      paidAt,
+      planKey: "scholarship:weekly",
+      planName
+    });
+
+    await database.ref(`${SCHOLARSHIP_ENTRIES_PATH}/${weekKey}/${uid}`).set({
+      orderId: razorpay_order_id,
+      paymentId: razorpay_payment_id,
+      paidAt
+    });
+
+    return res.status(200).json({ success: true, weekKey });
+  } catch (error) {
+    console.error("Scholarship verify error:", error.message);
+    return res.status(500).json({ message: "Verification failed." });
+  }
+});
+
+// The scholarship test itself — only served if this user has a confirmed entry for the current week
+app.get("/api/scholarship/my-test", verifyToken, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const weekKey = getScholarshipWeekKey();
+
+    const [entrySnapshot, testSnapshot, leaderboardEntrySnapshot] = await Promise.all([
+      database.ref(`${SCHOLARSHIP_ENTRIES_PATH}/${weekKey}/${uid}`).get(),
+      database.ref(`${SCHOLARSHIP_TESTS_PATH}/${weekKey}`).get(),
+      database.ref(`${SCHOLARSHIP_LEADERBOARD_PATH}/${weekKey}/${uid}`).get()
+    ]);
+
+    if (!entrySnapshot.exists()) {
+      return res.status(200).json({ test: null, message: "You haven't entered this week's Scholarship Test." });
+    }
+
+    if (leaderboardEntrySnapshot.exists()) {
+      return res.status(200).json({ test: null, message: "You've already submitted this week's Scholarship Test." });
+    }
+
+    if (!testSnapshot.exists()) {
+      return res.status(200).json({ test: null, message: "This week's paper hasn't been published yet. Check back soon." });
+    }
+
+    const paper = testSnapshot.val();
+    return res.status(200).json({
+      test: {
+        id: scholarshipTestId(weekKey),
+        testName: paper.title || `Scholarship Test — ${weekKey}`,
+        type: "scholarship",
+        access: "scholarship",
+        parsedQuestions: Array.isArray(paper.parsedQuestions) ? paper.parsedQuestions : [],
+        config: paper.config || {}
+      }
+    });
+  } catch (error) {
+    console.error("Scholarship my-test error:", error.message);
+    return res.status(500).json({ message: "Failed to load Scholarship Test" });
+  }
+});
+
+// Public leaderboard for the current week
+app.get("/api/scholarship/leaderboard", async (req, res) => {
+  try {
+    const weekKey = getScholarshipWeekKey();
+    const snapshot = await database.ref(`${SCHOLARSHIP_LEADERBOARD_PATH}/${weekKey}`).get();
+    const entries = normalizeList(snapshot.val());
+
+    const ranked = entries
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return Number(a.timeTakenSeconds || 0) - Number(b.timeTakenSeconds || 0);
+      })
+      .map((entry, index) => ({
+        rank: index + 1,
+        uid: entry.uid,
+        name: entry.name,
+        score: entry.score,
+        correct: entry.correct,
+        total: entry.total,
+        submittedAt: entry.submittedAt
+      }));
+
+    return res.status(200).json({ weekKey, leaderboard: ranked });
+  } catch (error) {
+    console.error("Scholarship leaderboard error:", error.message);
+    return res.status(500).json({ message: "Failed to load leaderboard" });
+  }
+});
+
+// Public top-3 winners banner (prize amounts joined with leaderboard top 3)
+app.get("/api/scholarship/winners", async (req, res) => {
+  try {
+    const weekKey = getScholarshipWeekKey();
+    const [leaderboardSnapshot, prizesSnapshot] = await Promise.all([
+      database.ref(`${SCHOLARSHIP_LEADERBOARD_PATH}/${weekKey}`).get(),
+      database.ref(`${SCHOLARSHIP_PRIZES_PATH}/${weekKey}`).get()
+    ]);
+
+    const entries = normalizeList(leaderboardSnapshot.val());
+    const prizes = prizesSnapshot.val() || { first: 0, second: 0, third: 0 };
+
+    const topThree = entries
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return Number(a.timeTakenSeconds || 0) - Number(b.timeTakenSeconds || 0);
+      })
+      .slice(0, 3)
+      .map((entry, index) => ({
+        rank: index + 1,
+        name: entry.name,
+        score: entry.score,
+        prize: [prizes.first, prizes.second, prizes.third][index] || 0
+      }));
+
+    return res.status(200).json({ weekKey, winners: topThree });
+  } catch (error) {
+    console.error("Scholarship winners error:", error.message);
+    return res.status(500).json({ message: "Failed to load winners" });
+  }
+});
+
+// ---- Admin ----
+
+// Upload/replace a week's scholarship paper
+app.put("/api/admin/scholarship/test", verifyAdminToken, async (req, res) => {
+  try {
+    const { weekKey, title, parsedQuestions, config } = req.body || {};
+    if (!weekKey || !/^\d{4}-\d{2}-\d{2}$/.test(weekKey)) {
+      return res.status(400).json({ message: "weekKey must be a YYYY-MM-DD Sunday date" });
+    }
+    if (!Array.isArray(parsedQuestions) || parsedQuestions.length === 0) {
+      return res.status(400).json({ message: "parsedQuestions is required" });
+    }
+    for (const q of parsedQuestions) {
+      if (!q.question || !Array.isArray(q.options) || typeof q.answerIndex !== "number") {
+        return res.status(400).json({ message: "Each question needs question, options[], and answerIndex" });
+      }
+    }
+
+    await database.ref(`${SCHOLARSHIP_TESTS_PATH}/${weekKey}`).set({
+      title: title || `Scholarship Test — ${weekKey}`,
+      parsedQuestions,
+      config: config && typeof config === "object" ? config : { durationMinutes: 120, marksPerQuestion: 2, negativeMarks: 0.66 },
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: req.admin.email
+    });
+
+    return res.status(200).json({ success: true, weekKey });
+  } catch (error) {
+    console.error("Admin scholarship upload error:", error.message);
+    return res.status(500).json({ message: "Failed to save Scholarship Test" });
+  }
+});
+
+// Set prize amounts for a week
+app.put("/api/admin/scholarship/prizes", verifyAdminToken, async (req, res) => {
+  try {
+    const { weekKey, first, second, third } = req.body || {};
+    if (!weekKey || !/^\d{4}-\d{2}-\d{2}$/.test(weekKey)) {
+      return res.status(400).json({ message: "weekKey must be a YYYY-MM-DD Sunday date" });
+    }
+    const amounts = { first: Number(first) || 0, second: Number(second) || 0, third: Number(third) || 0 };
+
+    await database.ref(`${SCHOLARSHIP_PRIZES_PATH}/${weekKey}`).set({
+      ...amounts,
+      updatedAt: new Date().toISOString(),
+      updatedBy: req.admin.email
+    });
+
+    return res.status(200).json({ success: true, weekKey, prizes: amounts });
+  } catch (error) {
+    console.error("Admin scholarship prizes error:", error.message);
+    return res.status(500).json({ message: "Failed to save prize amounts" });
+  }
+});
+
+// Admin: current week's slot count + entry count (quick glance)
+app.get("/api/admin/scholarship/overview", verifyAdminToken, async (req, res) => {
+  try {
+    const weekKey = getScholarshipWeekKey();
+    const [slotsSnapshot, entriesSnapshot, leaderboardSnapshot, prizesSnapshot] = await Promise.all([
+      database.ref(`${SCHOLARSHIP_SLOTS_PATH}/${weekKey}/count`).get(),
+      database.ref(`${SCHOLARSHIP_ENTRIES_PATH}/${weekKey}`).get(),
+      database.ref(`${SCHOLARSHIP_LEADERBOARD_PATH}/${weekKey}`).get(),
+      database.ref(`${SCHOLARSHIP_PRIZES_PATH}/${weekKey}`).get()
+    ]);
+
+    return res.status(200).json({
+      weekKey,
+      slotsFilled: Number(slotsSnapshot.val() || 0),
+      slotsTotal: SCHOLARSHIP_MAX_SLOTS,
+      entriesCount: entriesSnapshot.exists() ? Object.keys(entriesSnapshot.val()).length : 0,
+      submissionsCount: leaderboardSnapshot.exists() ? Object.keys(leaderboardSnapshot.val()).length : 0,
+      prizes: prizesSnapshot.val() || { first: 0, second: 0, third: 0 }
+    });
+  } catch (error) {
+    console.error("Admin scholarship overview error:", error.message);
+    return res.status(500).json({ message: "Failed to load scholarship overview" });
   }
 });
 
