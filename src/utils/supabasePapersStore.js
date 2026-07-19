@@ -18,7 +18,7 @@ export const loadSupabasePapers = async (accessWindow) => {
     if (!accessWindow) return [];
     const { start, end } = accessWindow;
     const data = await supabaseFetch(
-      `examsarkar_papers?select=*&paper_date=gte.${start}&paper_date=lte.${end}&status=eq.ready&order=paper_date.asc,paper_type.asc`
+      `examsarkar_papers?select=*&paper_date=gte.${start}&paper_date=lte.${end}&status=eq.ready&paper_type=neq.Scholarship&order=paper_date.asc,paper_type.asc`
     );
     if (!Array.isArray(data)) return [];
     return data.map(paper => ({
