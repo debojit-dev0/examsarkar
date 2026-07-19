@@ -685,7 +685,7 @@ const Dashboard = () => {
               <div className="test-series-card empty-series-card">
                 <div className="series-icon">📝</div>
                 <h3 className="series-title">No Mains papers purchased</h3>
-                <p className="series-subtitle">Buy a Mains subject at ₹90 to get access to question papers and submit answers.</p>
+                <p className="series-subtitle">Buy a Mains subject at ₹99 to get access to question papers and submit answers.</p>
                 <button className="series-button" style={{ color: '#5B6BFF' }} onClick={() => navigate('/mains-test-series')}>
                   View Mains Plans <ChevronRight size={18} />
                 </button>
