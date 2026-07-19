@@ -123,6 +123,89 @@ const isScholarshipEntryOpen = (weekKey) =>
   Date.now() < new Date(getScholarshipTestStartUTC(weekKey)).getTime();
 
 const scholarshipTestId = (weekKey) => `scholarship-${weekKey}`;
+// Supabase REST helper — same table/credentials the frontend already uses for regular papers
+const SUPABASE_URL = "https://pnmoeodcnjxmsfwmtdso.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBubW9lb2Rjbmp4bXNmd210ZHNvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwMTE2OTcsImV4cCI6MjA5ODU4NzY5N30.cnnNTtxbq_SWu-K0oBdpLPoS-WKhCD3CHux-ZWxzZD4";
+
+const supabaseFetch = async (query) => {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${query}`, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      "Content-Type": "application/json"
+    }
+  });
+  if (!response.ok) return [];
+  return await response.json();
+};
+
+// Fetches this week's published Scholarship paper row from Supabase, or null if not ready yet
+const getScholarshipPaper = async (weekKey) => {
+  try {
+    const rows = await supabaseFetch(
+      `examsarkar_papers?select=*&paper_type=eq.Scholarship&paper_date=eq.${weekKey}&status=eq.ready`
+    );
+    return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  } catch (error) {
+    console.error("Supabase scholarship paper fetch error:", error.message);
+    return null;
+  }
+};
+
+// Same "Q1... (A)... ANSWER: (C)" text parser the frontend uses for Supabase papers,
+// ported so the backend can build parsedQuestions server-side.
+const parseSupabaseContentToQuestions = (content) => {
+  if (!content || typeof content !== "string") return [];
+  try {
+    const questions = [];
+    const lines = content.split("\n").map((l) => l.trim());
+    let currentQ = null;
+    let parsingOptions = false;
+
+    for (const line of lines) {
+      if (!line || line === "---") continue;
+
+      const qMatch = line.match(/^(?:Q\s*)?(\d+)[.)]\s+(.+)/i);
+      if (qMatch) {
+        if (currentQ && currentQ.options.length >= 2) questions.push(currentQ);
+        currentQ = { question: qMatch[2], options: [], answerIndex: 0 };
+        parsingOptions = false;
+        continue;
+      }
+
+      if (!currentQ) continue;
+
+      const optMatch = line.match(/^\(([A-Da-d])\)\s+(.+)/) || line.match(/^([A-Da-d])\)\s+(.+)/);
+      if (optMatch) {
+        currentQ.options.push(optMatch[2]);
+        parsingOptions = true;
+        continue;
+      }
+
+      const ansMatch = line.match(/^(?:ANSWER|Answer|Ans|Correct\s*Answer)\s*[-:]\s*\(?([A-Da-d])\)?/i);
+      if (ansMatch) {
+        currentQ.answerIndex = ["A", "B", "C", "D"].indexOf(ansMatch[1].toUpperCase());
+        parsingOptions = false;
+        continue;
+      }
+
+      if (
+        !parsingOptions &&
+        !line.startsWith("ExamSarkar") &&
+        !line.startsWith("Answer Distribution") &&
+        !line.startsWith("Total Questions")
+      ) {
+        currentQ.question += "\n" + line;
+      }
+    }
+
+    if (currentQ && currentQ.options.length >= 2) questions.push(currentQ);
+    return questions;
+  } catch (e) {
+    console.error("Failed to parse scholarship paper content:", e);
+    return [];
+  }
+};
 const normalizeList = (value) => {
   if (Array.isArray(value)) return value.filter(Boolean);
   if (value && typeof value === "object") return Object.values(value).filter(Boolean);
@@ -1897,14 +1980,14 @@ app.get("/api/admin/mains/answers/:subject/:uid", verifyAdminToken, async (req, 
 app.get("/api/scholarship/status", optionalVerifyToken, async (req, res) => {
   try {
     const weekKey = getScholarshipWeekKey();
-    const [slotsSnapshot, testSnapshot, entrySnapshot] = await Promise.all([
+    const [slotsSnapshot, scholarshipPaper, entrySnapshot] = await Promise.all([
       database.ref(`${SCHOLARSHIP_SLOTS_PATH}/${weekKey}/count`).get(),
-      database.ref(`${SCHOLARSHIP_TESTS_PATH}/${weekKey}`).get(),
+      getScholarshipPaper(weekKey),
       req.user ? database.ref(`${SCHOLARSHIP_ENTRIES_PATH}/${weekKey}/${req.user.uid}`).get() : Promise.resolve(null)
     ]);
 
     const slotsFilled = Number(slotsSnapshot.val() || 0);
-    const testExists = testSnapshot.exists();
+    const testExists = Boolean(scholarshipPaper);
     const entryOpen = isScholarshipEntryOpen(weekKey) && testExists && slotsFilled < SCHOLARSHIP_MAX_SLOTS;
     const hasEntered = Boolean(entrySnapshot && entrySnapshot.exists());
 
@@ -1939,8 +2022,8 @@ app.post("/api/scholarship/create-order", verifyToken, async (req, res) => {
       return res.status(400).json({ message: "Entry for this week's Scholarship Test is closed." });
     }
 
-    const testSnapshot = await database.ref(`${SCHOLARSHIP_TESTS_PATH}/${weekKey}`).get();
-    if (!testSnapshot.exists()) {
+    const scholarshipPaper = await getScholarshipPaper(weekKey);
+    if (!scholarshipPaper) {
       return res.status(400).json({ message: "This week's Scholarship Test hasn't been published yet." });
     }
 
@@ -2067,9 +2150,8 @@ app.get("/api/scholarship/my-test", verifyToken, async (req, res) => {
     const uid = req.user.uid;
     const weekKey = getScholarshipWeekKey();
 
-    const [entrySnapshot, testSnapshot, leaderboardEntrySnapshot] = await Promise.all([
+    const [entrySnapshot, leaderboardEntrySnapshot] = await Promise.all([
       database.ref(`${SCHOLARSHIP_ENTRIES_PATH}/${weekKey}/${uid}`).get(),
-      database.ref(`${SCHOLARSHIP_TESTS_PATH}/${weekKey}`).get(),
       database.ref(`${SCHOLARSHIP_LEADERBOARD_PATH}/${weekKey}/${uid}`).get()
     ]);
 
@@ -2081,19 +2163,24 @@ app.get("/api/scholarship/my-test", verifyToken, async (req, res) => {
       return res.status(200).json({ test: null, message: "You've already submitted this week's Scholarship Test." });
     }
 
-    if (!testSnapshot.exists()) {
+    const scholarshipPaper = await getScholarshipPaper(weekKey);
+    if (!scholarshipPaper) {
       return res.status(200).json({ test: null, message: "This week's paper hasn't been published yet. Check back soon." });
     }
 
-    const paper = testSnapshot.val();
+    const parsedQuestions = parseSupabaseContentToQuestions(scholarshipPaper.content);
+    if (parsedQuestions.length === 0) {
+      return res.status(200).json({ test: null, message: "This week's paper couldn't be loaded. Please contact support." });
+    }
+
     return res.status(200).json({
       test: {
         id: scholarshipTestId(weekKey),
-        testName: paper.title || `Scholarship Test — ${weekKey}`,
+        testName: `${scholarshipPaper.paper_type} — ${scholarshipPaper.paper_date}`,
         type: "scholarship",
         access: "scholarship",
-        parsedQuestions: Array.isArray(paper.parsedQuestions) ? paper.parsedQuestions : [],
-        config: paper.config || {}
+        parsedQuestions,
+        config: { durationMinutes: 120, marksPerQuestion: 2, negativeMarks: 0.66 }
       }
     });
   } catch (error) {
@@ -2164,37 +2251,6 @@ app.get("/api/scholarship/winners", async (req, res) => {
 });
 
 // ---- Admin ----
-
-// Upload/replace a week's scholarship paper
-app.put("/api/admin/scholarship/test", verifyAdminToken, async (req, res) => {
-  try {
-    const { weekKey, title, parsedQuestions, config } = req.body || {};
-    if (!weekKey || !/^\d{4}-\d{2}-\d{2}$/.test(weekKey)) {
-      return res.status(400).json({ message: "weekKey must be a YYYY-MM-DD Sunday date" });
-    }
-    if (!Array.isArray(parsedQuestions) || parsedQuestions.length === 0) {
-      return res.status(400).json({ message: "parsedQuestions is required" });
-    }
-    for (const q of parsedQuestions) {
-      if (!q.question || !Array.isArray(q.options) || typeof q.answerIndex !== "number") {
-        return res.status(400).json({ message: "Each question needs question, options[], and answerIndex" });
-      }
-    }
-
-    await database.ref(`${SCHOLARSHIP_TESTS_PATH}/${weekKey}`).set({
-      title: title || `Scholarship Test — ${weekKey}`,
-      parsedQuestions,
-      config: config && typeof config === "object" ? config : { durationMinutes: 120, marksPerQuestion: 2, negativeMarks: 0.66 },
-      uploadedAt: new Date().toISOString(),
-      uploadedBy: req.admin.email
-    });
-
-    return res.status(200).json({ success: true, weekKey });
-  } catch (error) {
-    console.error("Admin scholarship upload error:", error.message);
-    return res.status(500).json({ message: "Failed to save Scholarship Test" });
-  }
-});
 
 // Set prize amounts for a week
 app.put("/api/admin/scholarship/prizes", verifyAdminToken, async (req, res) => {
