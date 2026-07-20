@@ -375,18 +375,11 @@ const getPurchasePlan = (purchase) => {
 };
 
 const isPurchaseActive = (purchase) => {
-  if (!purchase.paidAt) return false;
-  const { planPeriod } = parsePlanKey(purchase.planKey);
-  if (planPeriod === 'mains') {
-    const expiresAt = new Date(new Date(purchase.paidAt).getTime() + 30 * 24 * 60 * 60 * 1000);
-    return new Date() < expiresAt;
-  }
-  const accessWindow = getAccessWindow(planPeriod, purchase.paidAt);
-  if (!accessWindow) return false;
-  // Active through the end of the last day in the purchase-anchored window.
-  const todayKey = toDayKey(new Date());
-  return Boolean(todayKey && todayKey <= accessWindow.end);
-};
+    // Lifetime access — once a purchase is paid, it never expires. Students
+    // shouldn't lose access to papers they haven't attempted yet just because
+    // the purchase's original calendar window (or, for Mains, 30 days) passed.
+    return Boolean(purchase.paidAt);
+  };
 
 const testMatchesPurchase = (test, purchase) => {
   if (!test || !purchase) return false;
