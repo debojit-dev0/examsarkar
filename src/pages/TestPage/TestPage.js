@@ -67,6 +67,11 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
             year: supabasePaper.year,
             status: supabasePaper.status,
             source: 'supabase',
+            config: {
+              durationMinutes: 120,
+              marksPerQuestion: String(supabasePaper.paper_type || '').toUpperCase().includes('CSAT') ? 2.5 : 2,
+              negativeMarks: String(supabasePaper.paper_type || '').toUpperCase().includes('CSAT') ? 0.83 : 0.66
+            },
             parsedQuestions: parseContentToQuestions(supabasePaper.content)
           });
           setError(null);
