@@ -408,6 +408,23 @@ const Dashboard = () => {
     return filteredTests;
   };
 
+  const getTestSerialNumbers = (tests) => {
+    const counters = {};
+    const map = {};
+    const sorted = [...(Array.isArray(tests) ? tests : [])].sort((a, b) => {
+      const da = new Date(a.date || a.paper_date || 0).getTime();
+      const db = new Date(b.date || b.paper_date || 0).getTime();
+      return da - db;
+    });
+    sorted.forEach((test) => {
+      const subjectKey = String(test.subject || 'all').toLowerCase();
+      counters[subjectKey] = (counters[subjectKey] || 0) + 1;
+      map[test.id] = counters[subjectKey];
+    });
+    return map;
+  };
+
+  const testSerialNumbers = getTestSerialNumbers(purchaseData.accessibleTests);
   const unlockedTests = purchaseData.purchasedPlans.length > 0 ? getFilteredTests(purchaseData.accessibleTests).slice(0, 6) : [];
   const recentActivity = Array.isArray(userDashboard.recentQuizActivity)
     ? userDashboard.recentQuizActivity
@@ -647,7 +664,9 @@ const Dashboard = () => {
                   {unlockedTests.map((test) => (
                     <div key={test.id} className="unlocked-test-item">
                       <div>
-                        <p className="unlocked-test-title">{test.testName}</p>
+                        <p className="unlocked-test-title">
+                          <span className="test-serial-number">#{String(testSerialNumbers[test.id] || 0).padStart(4, '0')}</span> {test.testName}
+                        </p>
                         <p className="unlocked-test-meta">
                           {String(test.subject || 'all').toUpperCase()} • {String(test.type || 'daily').toUpperCase()} • {test.questionCount} questions
                         </p>
