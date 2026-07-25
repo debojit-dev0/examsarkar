@@ -38,6 +38,11 @@ export const loadSupabasePapers = async (accessWindow) => {
       year: paper.year,
       status: paper.status,
       source: 'supabase'
+      config: {
+        durationMinutes: 120,
+        marksPerQuestion: String(paper.paper_type || '').toUpperCase().includes('CSAT') ? 2.5 : 2,
+        negativeMarks: String(paper.paper_type || '').toUpperCase().includes('CSAT') ? 0.83 : 0.66
+      },
     }));
   } catch (error) {
     console.error('Failed to load Supabase papers:', error);
