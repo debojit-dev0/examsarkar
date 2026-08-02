@@ -38,11 +38,6 @@ export const loadSupabasePapers = async (accessWindow) => {
       year: paper.year,
       status: paper.status,
       source: 'supabase',
-      config: {
-        durationMinutes: 120,
-        marksPerQuestion: String(paper.paper_type || '').toUpperCase().includes('CSAT') ? 2.5 : 2,
-        negativeMarks: String(paper.paper_type || '').toUpperCase().includes('CSAT') ? 0.83 : 0.66
-      },
     }));
   } catch (error) {
     console.error('Failed to load Supabase papers:', error);
@@ -110,5 +105,92 @@ export const parseContentToQuestions = (content) => {
   } catch (e) {
     console.error('Failed to parse content:', e);
     return [];
+  }
+};
+
+// For Mains papers (essay / descriptive GS papers) which have no MCQ options —
+// splits content into one entry per question/topic so it can be viewed one at a time.
+export const parseContentToPlainQuestions = (content) => {
+  if (!content || typeof content !== 'string') return [];
+  try {
+    const lines = content.split('\n').map((l) => l.trim());
+    const questions = [];
+    let current = null;
+    let sectionLabel = null;
+
+    const sectionRegex = /^\*{0,2}SECTION\s+[A-Z0-9]+.*$/i;
+    const questionStartRegex = /^(?:Q\s*\.?\s*(\d+)[.)]|Topic\s+(\d+)\s*[:.])\s*(.*)$/i;
+    const skipPrefixes = ['ExamSarkar', 'Total Questions', 'Total Topics', 'Note:'];
+
+    for (const line of lines) {
+      if (!line || line === '--' || line === '---') continue;
+
+      if (sectionRegex.test(line)) {
+        sectionLabel = line.replace(/\*/g, '').trim();
+        continue;
+      }
+
+      const qMatch = line.match(questionStartRegex);
+      if (qMatch) {
+        if (current) questions.push(current);
+        const num = qMatch[1] || qMatch[2];
+        current = {
+          label: qMatch[1] ? `Q${num}` : `Topic ${num}`,
+          section: sectionLabel,
+          text: (qMatch[3] || '').trim(),
+        };
+        continue;
+      }
+
+      if (!current) continue;
+      if (skipPrefixes.some((prefix) => line.startsWith(prefix))) continue;
+
+      current.text += (current.text ? '\n' : '') + line;
+    }
+
+    if (current) questions.push(current);
+    return questions;
+  } catch (e) {
+    console.error('Failed to parse mains content:', e);
+    return [];
+  }
+};
+
+// Extracts the "Total Questions: N | Time: ... | Maximum Marks: ..." style summary line, if present.
+export const parsePaperMetaLine = (content) => {
+  if (!content || typeof content !== 'string') return null;
+  const lines = content.split('\n').map((l) => l.trim());
+  return lines.find((l) => /^Total\s+(Questions|Topics)/i.test(l)) || null;
+};
+// Maps "Mains-GS1" / "Mains-Essay" -> "gs1" / "essay" to match existing mains subject keys
+const normalizeMainsSubjectKey = (paperType) => {
+  const match = String(paperType || '').match(/^Mains-(GS[1-4]|Essay)$/i);
+  if (!match) return null;
+  return match[1].toLowerCase();
+};
+
+// Loads the latest ready Mains paper per subject from Supabase, keyed by subject (gs1, gs2, gs3, gs4, essay)
+export const loadSupabaseMainsPapers = async () => {
+  try {
+    const data = await supabaseFetch(
+      `examsarkar_papers?select=*&section=eq.Mains&status=eq.ready&order=paper_date.desc`
+    );
+    if (!Array.isArray(data)) return {};
+
+    const bySubject = {};
+    for (const paper of data) {
+      const subject = normalizeMainsSubjectKey(paper.paper_type);
+      if (!subject || bySubject[subject]) continue; // keep only the latest per subject
+      bySubject[subject] = {
+        subject,
+        title: `${paper.paper_type} — ${paper.paper_date}`,
+        content: paper.content,
+        paperDate: paper.paper_date
+      };
+    }
+    return bySubject;
+  } catch (error) {
+    console.error('Failed to load Supabase mains papers:', error);
+    return {};
   }
 };

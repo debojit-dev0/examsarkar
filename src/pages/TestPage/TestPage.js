@@ -1,7 +1,7 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { loadAdminTests } from "../../utils/adminTestsStore";
-import { getSupabasePaperById, parseContentToQuestions } from '../../utils/supabasePapersStore';
+import { getSupabasePaperById, parseContentToQuestions, parseContentToPlainQuestions, parsePaperMetaLine } from '../../utils/supabasePapersStore';
 import { buildApiUrl } from "../../utils/apiBaseUrl";
 import Navbar from "../../components/Navbar/Navbar";
 import "./TestPage.css";
@@ -67,12 +67,9 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
             year: supabasePaper.year,
             status: supabasePaper.status,
             source: 'supabase',
-            config: {
-              durationMinutes: 120,
-              marksPerQuestion: String(supabasePaper.paper_type || '').toUpperCase().includes('CSAT') ? 2.5 : 2,
-              negativeMarks: String(supabasePaper.paper_type || '').toUpperCase().includes('CSAT') ? 0.83 : 0.66
-            },
-            parsedQuestions: parseContentToQuestions(supabasePaper.content)
+            parsedQuestions: parseContentToQuestions(supabasePaper.content),
+            plainQuestions: parseContentToPlainQuestions(supabasePaper.content),
+            paperMetaLine: parsePaperMetaLine(supabasePaper.content)
           });
           setError(null);
           setVisitedQuestions({ 0: true });
@@ -231,8 +228,13 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
     }));
   };
 
+  const getActiveQuestionsLength = () => {
+    if (test?.parsedQuestions?.length > 0) return test.parsedQuestions.length;
+    return test?.plainQuestions?.length || 0;
+  };
+
   const handleNextQuestion = () => {
-    if (currentQuestion < test.parsedQuestions.length - 1) {
+    if (currentQuestion < getActiveQuestionsLength() - 1) {
       goToQuestion(currentQuestion + 1);
     }
   };
@@ -982,6 +984,92 @@ export default function TestPage({ onLoginClick, onSignupClick }) {
                 Back to Tests
               </button>
             </main>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // Mains papers (Essay / descriptive GS papers) have no MCQ options — show a
+  // Prelims-style one-question-at-a-time viewer with Next/Previous, no answering.
+  if ((!test.parsedQuestions || test.parsedQuestions.length === 0) && test.plainQuestions && test.plainQuestions.length > 0) {
+    const questionCount = test.plainQuestions.length;
+    const safeIndex = Math.min(currentQuestion, questionCount - 1);
+    const question = test.plainQuestions[safeIndex];
+
+    return (
+      <>
+        <Navbar
+          onHomeClick={() => navigate("/")}
+          onPlansClick={() => navigate("/test-series")}
+          onLoginClick={onLoginClick}
+          onSignupClick={onSignupClick}
+        />
+
+        <div className="test-page">
+          <div className="test-exam-layout">
+            <aside className="exam-left-panel">
+              <h3 className="panel-title">Questions</h3>
+              <ul className="question-stats-list">
+                <li>Viewing: {safeIndex + 1} of {questionCount}</li>
+              </ul>
+
+              <button className="exit-btn" onClick={() => navigate("/test-series")}>
+                Exit
+              </button>
+            </aside>
+
+            <main className="exam-center-panel">
+              <header className="exam-header">
+                <div className="exam-header-top">
+                  <h2>{test.testName}</h2>
+                </div>
+                {test.paperMetaLine && <p>{test.paperMetaLine}</p>}
+              </header>
+
+              <section className="question-card">
+                {question.section && (
+                  <p className="mains-section-label">{question.section}</p>
+                )}
+                <h3 className="question-title">
+                  <span className="question-line">{`${question.label}.`}</span>
+                </h3>
+                <div className="mains-question-body">{question.text}</div>
+
+                <div className="action-buttons">
+                  <button
+                    className="action-btn"
+                    onClick={handlePreviousQuestion}
+                    disabled={safeIndex === 0}
+                  >
+                    Previous
+                  </button>
+                  <button
+                    className="action-btn"
+                    onClick={handleNextQuestion}
+                    disabled={safeIndex === questionCount - 1}
+                  >
+                    Next
+                  </button>
+                </div>
+              </section>
+            </main>
+
+            <aside className="exam-right-panel">
+              <h3 className="panel-title">Question Palette</h3>
+              <div className="palette-grid">
+                {test.plainQuestions.map((_, index) => (
+                  <button
+                    key={index}
+                    className={`palette-btn unattempted ${index === safeIndex ? "active" : ""}`}
+                    onClick={() => goToQuestion(index)}
+                    title={`Question ${index + 1}`}
+                  >
+                    {index + 1}
+                  </button>
+                ))}
+              </div>
+            </aside>
           </div>
         </div>
       </>

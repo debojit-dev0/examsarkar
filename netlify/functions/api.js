@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
 const dotenv = require('dotenv');
+const nodemailer = require('nodemailer');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Razorpay = require('razorpay');
@@ -10,6 +11,14 @@ const serverless = require('serverless-http');
 const { body, validationResult, param } = require('express-validator');
 
 dotenv.config();
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
 
 // Import Firebase (same as backend)
 const { database } = require('../../backend/firebaseAdmin');
@@ -2210,8 +2219,7 @@ app.get("/api/scholarship/leaderboard", async (req, res) => {
     return res.status(500).json({ message: "Failed to load leaderboard" });
   }
 });
-
-// Public top-3 winners banner (prize amounts joined with leaderboard top 3)
+// Public top-10 winners banner (prize amounts joined with leaderboard top 10)
 app.get("/api/scholarship/winners", async (req, res) => {
   try {
     const weekKey = getScholarshipWeekKey();
@@ -2221,22 +2229,23 @@ app.get("/api/scholarship/winners", async (req, res) => {
     ]);
 
     const entries = normalizeList(leaderboardSnapshot.val());
-    const prizes = prizesSnapshot.val() || { first: 0, second: 0, third: 0 };
+    const prizesRecord = prizesSnapshot.val() || {};
+    const amounts = Array.isArray(prizesRecord.amounts) ? prizesRecord.amounts : [];
 
-    const topThree = entries
+    const topTen = entries
       .sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score;
         return Number(a.timeTakenSeconds || 0) - Number(b.timeTakenSeconds || 0);
       })
-      .slice(0, 3)
+      .slice(0, 10)
       .map((entry, index) => ({
         rank: index + 1,
         name: entry.name,
         score: entry.score,
-        prize: [prizes.first, prizes.second, prizes.third][index] || 0
+        prize: Number(amounts[index]) || 0
       }));
 
-    return res.status(200).json({ weekKey, winners: topThree });
+    return res.status(200).json({ weekKey, winners: topTen });
   } catch (error) {
     console.error("Scholarship winners error:", error.message);
     return res.status(500).json({ message: "Failed to load winners" });
@@ -2248,19 +2257,22 @@ app.get("/api/scholarship/winners", async (req, res) => {
 // Set prize amounts for a week
 app.put("/api/admin/scholarship/prizes", verifyAdminToken, async (req, res) => {
   try {
-    const { weekKey, first, second, third } = req.body || {};
+    const { weekKey, amounts } = req.body || {};
     if (!weekKey || !/^\d{4}-\d{2}-\d{2}$/.test(weekKey)) {
       return res.status(400).json({ message: "weekKey must be a YYYY-MM-DD Sunday date" });
     }
-    const amounts = { first: Number(first) || 0, second: Number(second) || 0, third: Number(third) || 0 };
+    if (!Array.isArray(amounts) || amounts.length !== 10) {
+      return res.status(400).json({ message: "amounts must be an array of exactly 10 numbers (rank 1 to rank 10)" });
+    }
+    const cleanAmounts = amounts.map((a) => Number(a) || 0);
 
     await database.ref(`${SCHOLARSHIP_PRIZES_PATH}/${weekKey}`).set({
-      ...amounts,
+      amounts: cleanAmounts,
       updatedAt: new Date().toISOString(),
       updatedBy: req.admin.email
     });
 
-    return res.status(200).json({ success: true, weekKey, prizes: amounts });
+    return res.status(200).json({ success: true, weekKey, prizes: cleanAmounts });
   } catch (error) {
     console.error("Admin scholarship prizes error:", error.message);
     return res.status(500).json({ message: "Failed to save prize amounts" });
@@ -2278,13 +2290,16 @@ app.get("/api/admin/scholarship/overview", verifyAdminToken, async (req, res) =>
       database.ref(`${SCHOLARSHIP_PRIZES_PATH}/${weekKey}`).get()
     ]);
 
+    const prizesRecord = prizesSnapshot.val() || {};
+    const amounts = Array.isArray(prizesRecord.amounts) ? prizesRecord.amounts : new Array(10).fill(0);
+
     return res.status(200).json({
       weekKey,
       slotsFilled: Number(slotsSnapshot.val() || 0),
       slotsTotal: SCHOLARSHIP_MAX_SLOTS,
       entriesCount: entriesSnapshot.exists() ? Object.keys(entriesSnapshot.val()).length : 0,
       submissionsCount: leaderboardSnapshot.exists() ? Object.keys(leaderboardSnapshot.val()).length : 0,
-      prizes: prizesSnapshot.val() || { first: 0, second: 0, third: 0 }
+      prizes: amounts
     });
   } catch (error) {
     console.error("Admin scholarship overview error:", error.message);

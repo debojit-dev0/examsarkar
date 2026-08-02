@@ -31,7 +31,7 @@ function getAccessToken() {
   return localStorage.getItem("accessToken") || localStorage.getItem("token");
 }
 
-export default function ScholarshipTest() {
+export default function ScholarshipTest({ hideLeaderboard = false, hideWinnersBanner = false } = {}) {
   const navigate = useNavigate();
   const [status, setStatus] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
@@ -289,7 +289,7 @@ export default function ScholarshipTest() {
         </div>
       ) : (
         <>
-          {winners.length > 0 && (
+          {!hideWinnersBanner && winners.length > 0 && (
             <div className="scholarship-winners-banner">
               <p className="scholarship-winners-title">🏆 This Week's Winners</p>
               <div className="scholarship-winners-row">
@@ -339,7 +339,8 @@ export default function ScholarshipTest() {
 
           <div className="scholarship-cta-row">{renderCTA()}</div>
 
-          <div className="scholarship-leaderboard" id="scholarship-leaderboard">
+          {!hideLeaderboard && (
+            <div className="scholarship-leaderboard" id="scholarship-leaderboard">
             <p className="scholarship-leaderboard-title">All India Ranking</p>
             {leaderboard.length === 0 ? (
               <p className="scholarship-note">No submissions yet this week. Be the first!</p>
@@ -357,7 +358,8 @@ export default function ScholarshipTest() {
                 )}
               </div>
             )}
-          </div>
+            </div>
+          )}
         </>
       )}
     </div>

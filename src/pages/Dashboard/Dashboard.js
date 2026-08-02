@@ -4,11 +4,10 @@ import './Dashboard.css';
 import { buildApiUrl } from '../../utils/apiBaseUrl';
 import { fetchWithErrorHandling } from '../../utils/apiErrorHandler';
 import Navbar from "../../components/Navbar/Navbar";
-import ScholarshipTest from "../../components/ScholarshipTest/ScholarshipTest";
 import { useNavigate } from 'react-router-dom';
 import { loadPendingAttempts, loadRecentQuizActivity, mergeRecentQuizActivity, removeRecentQuizActivity, saveRecentQuizActivity, setPendingAttempts } from '../../utils/recentQuizActivityStore';
 import { useSEO } from '../../hooks/useSEO';
-import { loadSupabasePapers } from '../../utils/supabasePapersStore';
+import { loadSupabasePapers, loadSupabaseMainsPapers } from '../../utils/supabasePapersStore';
 const MAINS_SUBJECT_INFO = {
   gs1: { label: 'GS Paper I', icon: '📜', color: '#ff6b6b', sub: 'History • Geography • Society' },
   gs2: { label: 'GS Paper II', icon: '⚖️', color: '#4dabf7', sub: 'Polity • Governance • IR' },
@@ -314,11 +313,12 @@ const Dashboard = () => {
           } catch (supabaseErr) {
             console.error('Failed to load Supabase papers:', supabaseErr);
           }
+          const supabasePrelimsPapers = supabasePapers.filter((paper) => paper.type === 'prelims');
 
           setPurchaseData({
             loading: false,
             purchasedPlans,
-            accessibleTests: [...accessibleTests, ...supabasePapers]
+            accessibleTests: [...accessibleTests, ...supabasePrelimsPapers]
           });
         } else {
           setPurchaseData({ loading: false, purchasedPlans: [], accessibleTests: [] });
@@ -326,8 +326,30 @@ const Dashboard = () => {
 
         if (mainsRes?.ok) {
           const mainsJson = await mainsRes.json();
-          setMainsPurchases(Array.isArray(mainsJson.mainsPurchases) ? mainsJson.mainsPurchases : []);
-        }
+    const purchasedMains = Array.isArray(mainsJson.mainsPurchases) ? mainsJson.mainsPurchases : [];
+
+    let supabaseMainsBySubject = {};
+    try {
+      supabaseMainsBySubject = await loadSupabaseMainsPapers();
+    } catch (mainsSupabaseErr) {
+      console.error('Failed to load Supabase mains papers:', mainsSupabaseErr);
+    }
+
+    const mergedMains = purchasedMains.map((mp) => {
+      if (mp.hasPaper) return mp;
+      const supabasePaper = supabaseMainsBySubject[mp.subject];
+      if (!supabasePaper) return mp;
+      return {
+        ...mp,
+        hasPaper: true,
+        source: 'supabase',
+        supabaseContent: supabasePaper.content,
+        supabaseTitle: supabasePaper.title
+      };
+    });
+
+    setMainsPurchases(mergedMains);
+  }
         setMainsLoading(false);
       } catch (err) {
         console.error('Dashboard load error:', err);
@@ -408,23 +430,6 @@ const Dashboard = () => {
     return filteredTests;
   };
 
-  const getTestSerialNumbers = (tests) => {
-    const counters = {};
-    const map = {};
-    const sorted = [...(Array.isArray(tests) ? tests : [])].sort((a, b) => {
-      const da = new Date(a.date || a.paper_date || 0).getTime();
-      const db = new Date(b.date || b.paper_date || 0).getTime();
-      return da - db;
-    });
-    sorted.forEach((test) => {
-      const subjectKey = String(test.subject || 'all').toLowerCase();
-      counters[subjectKey] = (counters[subjectKey] || 0) + 1;
-      map[test.id] = counters[subjectKey];
-    });
-    return map;
-  };
-
-  const testSerialNumbers = getTestSerialNumbers(purchaseData.accessibleTests);
   const unlockedTests = purchaseData.purchasedPlans.length > 0 ? getFilteredTests(purchaseData.accessibleTests).slice(0, 6) : [];
   const recentActivity = Array.isArray(userDashboard.recentQuizActivity)
     ? userDashboard.recentQuizActivity
@@ -595,7 +600,7 @@ const Dashboard = () => {
           {/* Purchased Test Series */}
           <div className="explore-section">
             <div className="section-header">
-              <h2 className="section-title">Your Purchased Test Series</h2>
+              <h2 className="section-title">Your Prelims Test Series</h2>
               <p className="section-subtitle">
                 {purchaseData.loading
                   ? 'Loading unlocked tests...'
@@ -645,7 +650,7 @@ const Dashboard = () => {
               ) : (
                 <div className="test-series-card empty-series-card">
                   <div className="series-icon">🔒</div>
-                  <h3 className="series-title">No purchased tests yet</h3>
+                  <h3 className="series-title">No Prelims tests yet</h3>
                   <p className="series-subtitle">Complete a payment to unlock the GS / CSAT series added by admin.</p>
                   <button className="series-button" style={{ color: '#5B6BFF' }} onClick={() => navigate('/test-series')}>
                     View Plans <ChevronRight size={18} />
@@ -664,9 +669,7 @@ const Dashboard = () => {
                   {unlockedTests.map((test) => (
                     <div key={test.id} className="unlocked-test-item">
                       <div>
-                        <p className="unlocked-test-title">
-                          <span className="test-serial-number">#{String(testSerialNumbers[test.id] || 0).padStart(4, '0')}</span> {test.testName}
-                        </p>
+                        <p className="unlocked-test-title">{test.testName}</p>
                         <p className="unlocked-test-meta">
                           {String(test.subject || 'all').toUpperCase()} • {String(test.type || 'daily').toUpperCase()} • {test.questionCount} questions
                         </p>
@@ -733,15 +736,23 @@ const Dashboard = () => {
                       {!mp.hasPaper && (
                         <p className="mains-paper-status pending">Question paper not yet uploaded by admin.</p>
                       )}
+{mp.hasPaper && mp.source === 'supabase' && (
+  <div className="mains-paper-content">
+    <h4 style={{ marginBottom: '8px' }}>{mp.supabaseTitle}</h4>
+    <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.9rem', lineHeight: '1.5' }}>
+      {mp.supabaseContent}
+    </div>
+  </div>
+)}
 
-                      {mp.hasPaper && !timerStarted && (
-                        <button
-                          className="mains-download-btn"
-                          onClick={() => handleMainsDownload(mp.subject)}
-                        >
-                          ⬇ Download Question Paper
-                        </button>
-                      )}
+{mp.hasPaper && mp.source !== 'supabase' && !timerStarted && (
+  <button
+    className="mains-download-btn"
+    onClick={() => handleMainsDownload(mp.subject)}
+  >
+    ⬇ Download Question Paper
+  </button>
+)}
 
                       {timerStarted && (
                         <div className="mains-timer-row">
@@ -792,23 +803,7 @@ const Dashboard = () => {
               </div>
             )}
           </div>
-          {/* Daily Challenge */}
-          <div className="daily-challenge-section">
-            <div className="challenge-content">
-              <div className="challenge-icon">🏆</div>
-              <div className="challenge-text">
-                <h3 className="challenge-title">Daily Challenge</h3>
-                <p className="challenge-subtitle">Attempt today's quiz and build your streak.</p>
-              </div>
-            </div>
-            <button className="challenge-button" onClick={handleNavigateToTest}>
-              Attempt Now <ChevronRight size={20} />
-            </button>
-          </div>
-            {/* Scholarship Test */}
-          <div className="explore-section" style={{ marginTop: '24px' }}>
-            <ScholarshipTest />
-          </div>
+          
         </div>
 
         {/* Right Section */}
