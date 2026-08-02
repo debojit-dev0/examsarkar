@@ -37,7 +37,7 @@ export const loadSupabasePapers = async (accessWindow) => {
       month: paper.month,
       year: paper.year,
       status: paper.status,
-      source: 'supabase'
+      source: 'supabase',
       config: {
         durationMinutes: 120,
         marksPerQuestion: String(paper.paper_type || '').toUpperCase().includes('CSAT') ? 2.5 : 2,
