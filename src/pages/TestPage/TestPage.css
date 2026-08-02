@@ -267,6 +267,23 @@
   font-weight: 800;
 }
 
+.mains-section-label {
+  margin: 0 0 10px;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.mains-question-body {
+  white-space: pre-wrap;
+  color: #1e293b;
+  font-size: 16px;
+  line-height: 1.8;
+  font-weight: 500;
+}
+
 .question-line {
   display: block;
   margin-bottom: 6px;

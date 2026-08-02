@@ -50,24 +50,24 @@
   /* ========================= */
   /* FEATURES */
   /* ========================= */
-  .features {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
-  
-  .features li {
-    display: grid;
-    grid-template-columns: 12px 1fr; /* 🔥 FIX ALIGNMENT */
-    align-items: start;
-    column-gap: 10px;
-  
-    font-size: 13.5px;
-    color: #f9efef;;
-  
-    margin-bottom: 10px;
-    line-height: 1.5;
-  }
+  .sub-card .features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sub-card .features li {
+  display: grid;
+  grid-template-columns: 12px 1fr; /* 🔥 FIX ALIGNMENT */
+  align-items: start;
+  column-gap: 10px;
+
+  font-size: 13.5px;
+  color: #f9efef;
+
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
   
   /* bullet perfectly aligned */
   .tick {

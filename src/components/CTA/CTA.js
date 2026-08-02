@@ -50,7 +50,7 @@ const CTA = ({ onStartFreeTest, onExploreTestSeries, stats }) => {
             onClick={onStartFreeTest}
             type="button"
           >
-            Start Free Test
+            Scholarship Test
           </button>
           <button 
             className="cta-secondary"

@@ -66,6 +66,33 @@ const DEFAULT_PRELIMS_BANNERS = [
   }
 ];
 
+const MAX_BANNER_UPLOAD_BYTES = 8 * 1024 * 1024; // 8MB raw file cap before compression
+const BANNER_IMAGE_MAX_DIMENSION = 1600;
+const BANNER_IMAGE_QUALITY = 0.82;
+
+const compressBannerImage = (file, maxDimension = BANNER_IMAGE_MAX_DIMENSION, quality = BANNER_IMAGE_QUALITY) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read the selected file."));
+    reader.onload = (loadEvent) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Could not load the selected image."));
+      img.onload = () => {
+        const scale = Math.min(1, maxDimension / Math.max(img.width, img.height));
+        const width = Math.round(img.width * scale) || img.width;
+        const height = Math.round(img.height * scale) || img.height;
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = loadEvent.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
 const SUBJECT_LABELS = {
   gs: "GS / GE",
   csat: "CSAT",
@@ -336,6 +363,7 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
   const [bannerSlides, setBannerSlides] = useState(DEFAULT_PRELIMS_BANNERS);
   const [bannerSaving, setBannerSaving] = useState(false);
   const [bannerFeedback, setBannerFeedback] = useState("");
+  const [bannerUploadingIndex, setBannerUploadingIndex] = useState(null);
 
   const [tests, setTests] = useState([]);
   const [testsLoaded, setTestsLoaded] = useState(false);
@@ -652,6 +680,34 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
     setBannerSlides((prev) => prev.map((slide, index) => (
       index === slideIndex ? { ...slide, [field]: value } : slide
     )));
+  };
+
+  const handleBannerImageUpload = async (slideIndex, file) => {
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setBannerFeedback("Please select an image file (JPG, PNG, or WEBP).");
+      return;
+    }
+
+    if (file.size > MAX_BANNER_UPLOAD_BYTES) {
+      setBannerFeedback("Image is too large. Please choose a file under 8MB.");
+      return;
+    }
+
+    setBannerUploadingIndex(slideIndex);
+    setBannerFeedback("Processing image...");
+
+    try {
+      const dataUrl = await compressBannerImage(file);
+      updateBannerSlide(slideIndex, "imageUrl", dataUrl);
+      setBannerFeedback('Image ready. Click "Save Banners" to publish it.');
+    } catch (error) {
+      console.error("Failed to process banner image:", error);
+      setBannerFeedback(error.message || "Failed to process the selected image.");
+    } finally {
+      setBannerUploadingIndex(null);
+    }
   };
 
   const handleSaveBanners = async () => {
@@ -1142,12 +1198,42 @@ export default function AdminPanelPage({ initialRole = ROLE_SUPER_ADMIN, lockRol
                     </label>
 
                     <label>
-                      Image URL
+                      Banner Image
+                      <div className="banner-image-upload">
+                        {slide.imageUrl ? (
+                          <img src={slide.imageUrl} alt="" className="banner-image-thumb" />
+                        ) : (
+                          <span className="banner-image-thumb banner-image-thumb-empty"><FiImage /></span>
+                        )}
+                        <div className="banner-image-upload-controls">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            disabled={bannerUploadingIndex === index}
+                            onChange={(event) => {
+                              const file = event.target.files?.[0] || null;
+                              handleBannerImageUpload(index, file);
+                              event.target.value = "";
+                            }}
+                          />
+                          {bannerUploadingIndex === index ? (
+                            <span className="banner-upload-status">Processing...</span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </label>
+
+                    <label>
+                      Image URL (optional)
                       <input
-                        type="url"
-                        value={slide.imageUrl}
+                        type="text"
+                        value={slide.imageUrl && slide.imageUrl.startsWith("data:") ? "" : slide.imageUrl}
                         onChange={(event) => updateBannerSlide(index, "imageUrl", event.target.value)}
-                        placeholder="https://..."
+                        placeholder={
+                          slide.imageUrl && slide.imageUrl.startsWith("data:")
+                            ? "Image uploaded — paste a link here to replace it"
+                            : "https://..."
+                        }
                       />
                     </label>
 

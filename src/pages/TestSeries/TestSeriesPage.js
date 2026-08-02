@@ -7,9 +7,9 @@ import PlanSection from "../../components/PlanCard/PlanSection";
 import SignupModal from "../../components/Auth/SignupModal";
 import LoginModal from "../../components/Auth/LoginModal";
 import { preloadRazorpayCheckout, startPaymentCheckout } from "../../components/Payment/PaymentModal";
-import { loadAdminTests, loadPrelimsBannerSlides } from "../../utils/adminTestsStore";
+import { loadPrelimsBannerSlides } from "../../utils/adminTestsStore";
 import { useSEO } from "../../hooks/useSEO";
-
+import ScholarshipTest from "../../components/ScholarshipTest/ScholarshipTest";
 const DEFAULT_BANNER_SLIDES = [
   {
     id: "prelims-banner-1",
@@ -61,33 +61,7 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
   const navigate = useNavigate();
   const [authMode, setAuthMode] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(null); // Store which plan user selected
-  const [freeTests, setFreeTests] = useState([]);
-  const [loadingTests, setLoadingTests] = useState(true);
   const [bannerSlides, setBannerSlides] = useState(DEFAULT_BANNER_SLIDES);
-
-  const getVisibleFreeTests = (tests) => {
-    if (!Array.isArray(tests)) return [];
-
-    const toLocalDayKey = (value) => {
-      const date = new Date(value);
-      if (Number.isNaN(date.getTime())) return null;
-      return date.toLocaleDateString("en-CA");
-    };
-
-    const todayKey = toLocalDayKey(new Date());
-
-    return tests.filter((test) => {
-      if (test?.access !== "free") return false;
-
-      if (test?.type === "daily-quiz") {
-        const testDate = test.date || test.createdAt || test.updatedAt;
-        const testKey = toLocalDayKey(testDate);
-        return Boolean(todayKey && testKey && testKey === todayKey);
-      }
-
-      return true;
-    });
-  };
 
   useEffect(() => {
     const handler = (e) => {
@@ -117,34 +91,6 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
 
     window.addEventListener('openPaymentModal', handler);
     return () => window.removeEventListener('openPaymentModal', handler);
-  }, []);
-
-  useEffect(() => {
-    let isActive = true;
-
-    const loadFreeTests = async () => {
-      try {
-        setLoadingTests(true);
-        const tests = await loadAdminTests();
-        if (!isActive) return;
-        setFreeTests(getVisibleFreeTests(tests));
-      } catch (error) {
-        console.error("Failed to load free tests:", error);
-        if (isActive) {
-          setFreeTests([]);
-        }
-      } finally {
-        if (isActive) {
-          setLoadingTests(false);
-        }
-      }
-    };
-
-    loadFreeTests();
-
-    return () => {
-      isActive = false;
-    };
   }, []);
 
   useEffect(() => {
@@ -191,6 +137,18 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
   useEffect(() => {
     preloadRazorpayCheckout();
   }, []);
+  useEffect(() => {
+  if (window.location.hash === '#scholarship-section') {
+    const el = document.getElementById('scholarship-section');
+    if (el) {
+      setTimeout(() => {
+        const navbarHeight = 90; // adjust if your navbar is taller/shorter
+        const elementPosition = el.getBoundingClientRect().top + window.scrollY;
+        window.scrollTo({ top: elementPosition - navbarHeight, behavior: 'smooth' });
+      }, 300);
+    }
+  }
+}, []);
 
   return (
     <>
@@ -218,10 +176,8 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
                     style={{ backgroundImage: `url(${slide.imageUrl})` }}
                   >
                     <div className="overlay">
-                      <span className="slide-eyebrow">Featured banner</span>
                       <h2>{slide.title}</h2>
                       <p>{slide.subtitle}</p>
-                      <span className="slide-link-chip">Open banner</span>
                     </div>
                   </div>
                 );
@@ -269,51 +225,9 @@ export default function TestSeriesPage({ onLoginClick, onSignupClick }) {
             Built for serious aspirants • Based on real UPSC pattern
           </p>
 
-          <section className="free-tests-section">
-            <div className="free-tests-header">
-              <h2>Scholarship Test</h2>
-              <p>Attend Scholarship Test every Sunday</p>
-            </div>
-
-            {loadingTests ? (
-              <div className="free-tests-empty">
-                <div className="free-tests-empty-badge">LOADING</div>
-                <h2>Loading Scholarship Test</h2>
-                <p>Please wait while we fetch the latest uploaded test</p>
-              </div>
-            ) : freeTests.length > 0 ? (
-              <div className="free-tests-grid">
-                {freeTests.map((test) => (
-                  <article className="free-test-card" key={test.id}>
-                    <div className="free-test-topline">
-                      <span className="free-badge">FREE</span>
-                      <span className="free-test-type">{String(test.type || "test").replace(/-/g, " ").toUpperCase()}</span>
-                    </div>
-                    <h3>{test.testName || test.title || "Untitled Test"}</h3>
-                    <p>{({ gs: "GS / GE", csat: "CSAT", all: "All Access" }[test.subject]) || test.planTag || "Uploaded free test"}</p>
-                    <div className="free-test-meta">
-                      <span>{test.questionCount || test.parsedQuestions?.length || 0} questions</span>
-                      {test.date ? <span>{String(test.date).split("T")[0]}</span> : null}
-                    </div>
-                    <button
-                      type="button"
-                      className="attempt-quiz-btn"
-                      onClick={() => navigate(`/test/${test.id}`)}
-                    >
-                      Start Test
-                    </button>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <div className="free-tests-empty">
-                <div className="free-tests-empty-badge">NOT FOUND</div>
-                <h2>Tests not found</h2>
-                <p>Attend Scholarship Test every Sunday at 9:00 AM</p>
-              </div>
-            )}
-          </section>
-
+          <div id="scholarship-section" className="test-series-scholarship-section" style={{ marginTop: "24px", marginBottom: "24px" }}>
+          <ScholarshipTest hideLeaderboard hideWinnersBanner />
+        </div>
           {/* PLANS */}
           <PlanSection title="Daily Plan" price={99} type="daily" />
           <PlanSection title="Weekly Plan" price={299} type="weekly" />

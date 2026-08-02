@@ -68,7 +68,7 @@ export default function HeroSlider({ onStartFreeTest, onLoginClick, onDashboardC
         <div className="buttons">
           <button className="primary" onClick={onStartFreeTest}>
             <FaRocket className="btn-icon" />
-            Start Free Test
+            Scholarship Test
           </button>
 
           {isLoggedIn ? (

@@ -27,7 +27,6 @@ const PaymentPage = lazy(() => import("./pages/PaymentPage"));
 const AdminAuthPage = lazy(() => import("./pages/Admin/AdminAuthPage"));
 const ContactPage = lazy(() => import("./pages/Contact/ContactPage"));
 
-const sectionFallback = <div style={{ minHeight: 120 }} />;
 
 function HomePageSEO() {
   useSEO({
@@ -39,7 +38,7 @@ function HomePageSEO() {
   return null;
 }
 
-function DeferredSection({ minHeight = 120, rootMargin = "250px 0px", children }) {
+function DeferredSection({ minHeight = 120, rootMargin = "250px 0px", background = "transparent", children }) {
   const [shouldRender, setShouldRender] = useState(false);
   const containerRef = useRef(null);
 
@@ -66,11 +65,12 @@ function DeferredSection({ minHeight = 120, rootMargin = "250px 0px", children }
     return () => observer.disconnect();
   }, [rootMargin, shouldRender]);
 
-  return (
-    <div ref={containerRef} style={{ minHeight }}>
-      {shouldRender ? <Suspense fallback={sectionFallback}>{children}</Suspense> : sectionFallback}
-    </div>
-  );
+  const fallback = <div style={{ minHeight, background, overflow: 'hidden' }} />;
+return (
+  <div ref={containerRef} style={{ minHeight, background, overflow: 'hidden' }}>
+    {shouldRender ? <Suspense fallback={fallback}>{children}</Suspense> : fallback}
+  </div>
+);
 }
 
 
@@ -139,7 +139,7 @@ function AppContent() {
   };
 
   const handleStartFreeTest = () => {
-    navigate("/test-series");
+    navigate("/test-series#scholarship-section");
   };
 
   // refs for smooth scroll
@@ -180,10 +180,10 @@ function AppContent() {
             </div>
 
             {/* MAIN SECTIONS */}
-            <DeferredSection minHeight={180}>
+            <DeferredSection minHeight={180} background="#f8fafc">
               <Tiles />
             </DeferredSection>
-            <DeferredSection minHeight={180}>
+            <DeferredSection minHeight={180} background="#0f172a">
               <WhyUs />
             </DeferredSection>
             {/* <FreeTest /> */}
