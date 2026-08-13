@@ -1603,8 +1603,12 @@ app.post(
         key_id: process.env.RAZORPAY_KEY_ID
       });
     } catch (error) {
-      console.error("Create order error:", error.message);
-      return res.status(500).json({ message: "Failed to create payment order" });
+      console.error("Create order error:", error?.error || error?.message || error);
+      const razorpayReason = error?.error?.description || error?.error?.reason;
+      return res.status(500).json({
+        message: "Failed to create payment order",
+        reason: razorpayReason || undefined
+      });
     }
   }
 );
