@@ -67,8 +67,9 @@ app.use(express.json({ limit: "20mb", verify: (req, res, buf) => { req.rawBody =
 
 // Razorpay client
 const getRazorpayClient = () => {
-  const keyId = process.env.RAZORPAY_KEY_ID;
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  const clean = (v) => String(v || '').trim().replace(/^["']|["']$/g, '');
+  const keyId = clean(process.env.RAZORPAY_KEY_ID);
+  const keySecret = clean(process.env.RAZORPAY_KEY_SECRET);
   if (!keyId || !keySecret) return null;
   return new Razorpay({ key_id: keyId, key_secret: keySecret });
 };
