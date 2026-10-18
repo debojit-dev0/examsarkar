@@ -1630,11 +1630,18 @@ app.post("/api/payment/verify", verifyToken, async (req, res) => {
     }
 
     const paymentRef = database.ref(`payments/${razorpay_order_id}`);
+    const existing = (await paymentRef.get()).val();
+    if (!existing) {
+      return res.status(404).json({ message: "Order not found." });
+    }
+    if (existing.uid && existing.uid !== req.user.uid) {
+      return res.status(403).json({ message: "Order does not belong to this user." });
+    }
+
     const paidAt = new Date().toISOString();
     await paymentRef.update({ status: "paid", paymentId: razorpay_payment_id, paidAt });
 
-    const p = await paymentRef.get();
-    const record = p.val() || {};
+    const record = existing;
     const uid = record?.uid;
     const planKey = record?.planKey;
     const planName = record?.planName;

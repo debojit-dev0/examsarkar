@@ -120,6 +120,36 @@ if (!document.getElementById('toast-animations')) {
   document.head.appendChild(style);
 }
 
+// Confirms a completed Razorpay payment with the server (signature check + plan activation).
+async function verifyPayment(response) {
+  try {
+    const verifyRes = await fetch(buildApiUrl('/api/payment/verify'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${localStorage.getItem('accessToken') || ''}`
+      },
+      body: JSON.stringify(response)
+    });
+
+    if (verifyRes.status === 401) {
+      handleUnauthorized();
+      return false;
+    }
+
+    const verifyJson = await verifyRes.json().catch(() => ({}));
+    if (!verifyRes.ok || !verifyJson?.success) {
+      showToast(verifyJson?.message || 'Payment verification failed. If money was deducted, contact support.', 'error');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error(err);
+    showToast('Could not confirm your payment. If money was deducted, contact support.', 'error');
+    return false;
+  }
+}
+
 export function preloadRazorpayCheckout() {
   return loadScript('https://checkout.razorpay.com/v1/checkout.js');
 }
@@ -168,10 +198,11 @@ export default function PaymentModal({ plan = 'Subscription', price = 499, perio
         name: 'ExamSarkar',
         description: resolvedPlanName,
         order_id: data.order.id,
-        handler: function (response) {
-          // Do not verify here; rely on server-side webhook to confirm payment and attach the plan.
-          // Notify the app UI and close the modal immediately.
+        handler: async function (response) {
+          const verified = await verifyPayment(response);
+          if (!verified) return;
           window.dispatchEvent(new CustomEvent('paymentSuccess', { detail: { orderId: data.order.id, planKey: resolvedPlanKey, planName: resolvedPlanName } }));
+          showToast('Payment successful!', 'success');
           onClose();
         },
         modal: {
@@ -265,25 +296,8 @@ export async function startPaymentCheckout({ plan, price, period = 'daily', plan
       description: resolvedPlanName,
       order_id: data.order.id,
       handler: async function (response) {
-        const verifyRes = await fetch(buildApiUrl('/api/payment/verify'), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('accessToken') || ''}`
-          },
-          body: JSON.stringify(response)
-        });
-
-        if (verifyRes.status === 401) {
-          handleUnauthorized();
-          return;
-        }
-
-        const verifyJson = await verifyRes.json();
-        if (!verifyRes.ok || !verifyJson?.success) {
-          showToast('Payment verification failed. Please try again.', 'error');
-          return;
-        }
+        const verified = await verifyPayment(response);
+        if (!verified) return;
 
         window.dispatchEvent(new CustomEvent('paymentSuccess', { detail: { orderId: data.order.id, planKey: resolvedPlanKey, planName: resolvedPlanName } }));
         showToast('Payment successful! Redirecting to dashboard...', 'success');
